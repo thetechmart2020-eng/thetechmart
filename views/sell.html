@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sell or trade your device — TheTechMart</title>
+<link rel="icon" type="image/png" href="/img/favicon.png">
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="wrap">
+    <a href="/" class="brand"><img class="logo-mark" src="/img/logo.png" alt="TheTechMart"></a>
+    <div class="nav-links">
+      <a href="/#shop">Shop</a>
+      <a href="/sell">Sell / Trade-in</a>
+    </div>
+    <a href="/sell" class="nav-cta">Get a quote</a>
+  </div>
+</nav>
+
+<div class="form-page">
+  <div class="eyebrow">Sell or trade</div>
+  <h1 style="font-size:30px;margin-bottom:8px;">Tell us about your device</h1>
+  <p style="color:var(--text-dim);font-size:14px;margin-bottom:26px;">We review every submission by hand and get back to you on WhatsApp with a number.</p>
+
+  <div class="type-toggle">
+    <button type="button" class="active" data-type="sell">Sell for cash
+      <span class="tt-desc">We buy it from you outright</span>
+    </button>
+    <button type="button" data-type="trade">Trade it in
+      <span class="tt-desc">Credit toward another device</span>
+    </button>
+  </div>
+
+  <div class="form-card">
+    <form id="tradein-form">
+      <input type="hidden" name="type" value="sell">
+      <div class="field-row">
+        <div class="field">
+          <label>Brand</label>
+          <input type="text" name="brand" required placeholder="e.g. Apple">
+        </div>
+        <div class="field">
+          <label>Model</label>
+          <input type="text" name="model" required placeholder="e.g. iPhone 13">
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Storage</label>
+          <input type="text" name="storage" placeholder="e.g. 128GB">
+        </div>
+        <div class="field">
+          <label>Condition</label>
+          <select name="condition">
+            <option>Like new</option>
+            <option>Good</option>
+            <option>Fair</option>
+            <option>Damaged / for parts</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Your asking price (optional)</label>
+        <input type="number" name="askingPrice" placeholder="e.g. 6000">
+      </div>
+      <div class="field">
+        <label>Photos of the device</label>
+        <div class="dropzone" id="dropzone">Click to add photos (screen, back, any damage)</div>
+        <input type="file" id="photos" name="photos" accept="image/*" multiple hidden>
+        <div class="thumb-row" id="thumbs"></div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Your name</label>
+          <input type="text" name="name" required>
+        </div>
+        <div class="field">
+          <label>WhatsApp number</label>
+          <input type="tel" name="phone" required placeholder="e.g. 0821234567">
+        </div>
+      </div>
+      <div class="field">
+        <label>Anything else?</label>
+        <textarea name="notes" placeholder="Battery health, accessories included, faults…"></textarea>
+      </div>
+      <button type="submit" class="btn btn-primary btn-block">Submit for review</button>
+      <p class="helper">This sends your details to us and opens WhatsApp so you can confirm — we'll come back with a firm offer.</p>
+    </form>
+  </div>
+</div>
+
+<footer class="footer">
+  <div class="wrap">
+    <span>© TheTechMart — "the #1 electronics market"</span>
+    <div class="footer-links">
+      <a href="https://wa.me/27716623565" target="_blank" rel="noopener">WhatsApp</a>
+      <a href="mailto:thetechmart2020@gmail.com">Email</a>
+      <a href="https://instagram.com/the_tech_mart" target="_blank" rel="noopener">Instagram</a>
+      <a href="https://facebook.com/TheTechMart" target="_blank" rel="noopener">Facebook</a>
+      <a href="https://x.com/The_Tech_Mart" target="_blank" rel="noopener">X</a>
+    </div>
+  </div>
+</footer>
+
+<script src="/js/common.js"></script>
+<script>
+let currentType = 'sell';
+document.querySelectorAll('.type-toggle button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.type-toggle button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentType = btn.dataset.type;
+    document.querySelector('input[name=type]').value = currentType;
+  });
+});
+
+const dropzone = document.getElementById('dropzone');
+const photosInput = document.getElementById('photos');
+dropzone.addEventListener('click', () => photosInput.click());
+photosInput.addEventListener('change', () => {
+  const thumbs = document.getElementById('thumbs');
+  thumbs.innerHTML = '';
+  [...photosInput.files].forEach(f => {
+    const img = document.createElement('img');
+    img.src = URL.createObjectURL(f);
+    thumbs.appendChild(img);
+  });
+  dropzone.textContent = `${photosInput.files.length} photo(s) selected — click to change`;
+});
+
+document.getElementById('tradein-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  fd.delete('photos');
+  [...photosInput.files].forEach(f => fd.append('photos', f));
+
+  try {
+    const res = await fetch('/api/tradeins', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Something went wrong');
+    toast('Submitted — opening WhatsApp…');
+    window.open(data.whatsappUrl, '_blank');
+    e.target.reset();
+    document.getElementById('thumbs').innerHTML = '';
+    dropzone.textContent = 'Click to add photos (screen, back, any damage)';
+  } catch (err) {
+    toast(err.message);
+  }
+});
+</script>
+</body>
+</html>

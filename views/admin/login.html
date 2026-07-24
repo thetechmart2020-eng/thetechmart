@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin login — TheTechMart</title>
+<link rel="icon" type="image/png" href="/img/favicon.png">
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;">
+  <div class="modal" style="position:static;max-width:380px;width:100%;">
+    <div class="brand" style="margin-bottom:22px;"><img class="logo-mark" src="/img/logo.png" alt="TheTechMart"></div>
+    <h3>Admin sign in</h3>
+    <p class="sub">Manage stock, offers &amp; trade-ins.</p>
+    <form id="login-form">
+      <div class="field">
+        <label>Password</label>
+        <input type="password" name="password" required autofocus>
+      </div>
+      <button type="submit" class="btn btn-primary btn-block">Sign in</button>
+      <p class="helper">Default password is <span class="mono">admin123</span> — change it under Settings after your first login.</p>
+    </form>
+  </div>
+</div>
+<script src="/js/common.js"></script>
+<script>
+document.getElementById('login-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  try {
+    await api('/api/admin/login', { method: 'POST', body: { password: fd.get('password') } });
+    location.href = '/admin/dashboard';
+  } catch (err) {
+    toast(err.message);
+  }
+});
+</script>
+</body>
+</html>

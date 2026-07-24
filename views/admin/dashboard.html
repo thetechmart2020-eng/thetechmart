@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — TheTechMart</title>
+<link rel="icon" type="image/png" href="/img/favicon.png">
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<div class="admin-shell">
+  <aside class="admin-side">
+    <div class="brand"><img class="logo-mark" src="/img/logo.png" alt="TheTechMart"></div>
+    <button class="admin-tab active" data-tab="overview">Overview</button>
+    <button class="admin-tab" data-tab="products">Stock <span class="count" id="c-products"></span></button>
+    <button class="admin-tab" data-tab="offers">Offers <span class="count" id="c-offers"></span></button>
+    <button class="admin-tab" data-tab="tradeins">Trade-ins <span class="count" id="c-tradeins"></span></button>
+    <button class="admin-tab" data-tab="settings">Settings</button>
+    <div style="flex:1"></div>
+    <button class="admin-tab" onclick="logout()">Sign out</button>
+  </aside>
+
+  <main class="admin-main">
+
+    <section class="admin-panel active" id="panel-overview">
+      <div class="admin-head"><h2>Overview</h2></div>
+      <div class="stat-cards">
+        <div class="stat-card"><div class="num" id="ov-products">0</div><div class="lbl">Devices listed</div></div>
+        <div class="stat-card"><div class="num" id="ov-offers">0</div><div class="lbl">Offers pending</div></div>
+        <div class="stat-card"><div class="num" id="ov-tradeins">0</div><div class="lbl">Trade-ins pending</div></div>
+      </div>
+      <p style="color:var(--text-dim);font-size:13.5px;line-height:1.6;max-width:60ch;">
+        Upload your price list under <b style="color:var(--text)">Stock</b> to populate the shop. New offers and sell/trade-in
+        requests land here in real time — accept or reject each one, then confirm the outcome with the customer on WhatsApp.
+      </p>
+    </section>
+
+    <section class="admin-panel" id="panel-products">
+      <div class="admin-head">
+        <h2>Stock</h2>
+      </div>
+      <div class="upload-box">
+        <div><b>Upload your price list (CSV)</b></div>
+        <div class="helper">Columns: brand, model, price, condition, storage, color, stock, imageUrl (optional). Re-uploading updates matching rows instead of duplicating them.</div>
+        <input type="file" id="csv-file" accept=".csv">
+        <div style="margin-top:12px;"><button class="btn btn-primary btn-sm" onclick="uploadCsv()">Upload &amp; sync stock</button></div>
+      </div>
+      <table class="table" id="products-table">
+        <thead><tr><th></th><th>Device</th><th>Condition</th><th>Price</th><th>Stock</th><th>Status</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="admin-panel" id="panel-offers">
+      <div class="admin-head"><h2>Offers</h2></div>
+      <table class="table" id="offers-table">
+        <thead><tr><th>Device</th><th>List</th><th>Offer</th><th>From</th><th>Status</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="admin-panel" id="panel-tradeins">
+      <div class="admin-head"><h2>Sell &amp; trade-in requests</h2></div>
+      <table class="table" id="tradeins-table">
+        <thead><tr><th>Photos</th><th>Device</th><th>Type</th><th>Asking</th><th>From</th><th>Status</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="admin-panel" id="panel-settings">
+      <div class="admin-head"><h2>Settings</h2></div>
+      <div class="form-card" style="max-width:460px;">
+        <div class="field">
+          <label>Store name</label>
+          <input type="text" id="s-storename">
+        </div>
+        <div class="field">
+          <label>WhatsApp number (country code + number, digits only)</label>
+          <input type="text" id="s-whatsapp" placeholder="e.g. 27821234567">
+        </div>
+        <div class="field">
+          <label>Admin password</label>
+          <input type="text" id="s-password">
+        </div>
+        <button class="btn btn-primary" onclick="saveSettings()">Save settings</button>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- image upload modal -->
+<div class="overlay" id="img-overlay">
+  <div class="modal">
+    <div class="modal-inner">
+      <button class="modal-close" onclick="document.getElementById('img-overlay').classList.remove('open')">&times;</button>
+      <h3>Product photo</h3>
+      <p class="sub" id="img-sub"></p>
+      <input type="file" id="img-file" accept="image/*">
+      <button class="btn btn-primary btn-block" style="margin-top:14px;" onclick="uploadImage()">Upload</button>
+    </div>
+  </div>
+</div>
+
+<script src="/js/common.js"></script>
+<script>
+let PRODUCTS = [], OFFERS = [], TRADEINS = [];
+let imgTargetId = null;
+
+async function checkAuth() {
+  const { isAdmin } = await api('/api/admin/session');
+  if (!isAdmin) location.href = '/admin';
+}
+
+document.querySelectorAll('.admin-tab[data-tab]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.admin-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.admin-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+async function logout() {
+  await api('/api/admin/logout', { method: 'POST' });
+  location.href = '/admin';
+}
+
+async function loadAll() {
+  [PRODUCTS, OFFERS, TRADEINS] = await Promise.all([
+    api('/api/admin/products'), api('/api/admin/offers'), api('/api/admin/tradeins')
+  ]);
+  renderProducts(); renderOffers(); renderTradeins(); renderCounts();
+}
+
+function renderCounts() {
+  document.getElementById('c-products').textContent = PRODUCTS.length;
+  const pendingOffers = OFFERS.filter(o => o.status === 'pending').length;
+  const pendingTrades = TRADEINS.filter(t => t.status === 'pending').length;
+  document.getElementById('c-offers').textContent = pendingOffers;
+  document.getElementById('c-tradeins').textContent = pendingTrades;
+  document.getElementById('ov-products').textContent = PRODUCTS.length;
+  document.getElementById('ov-offers').textContent = pendingOffers;
+  document.getElementById('ov-tradeins').textContent = pendingTrades;
+}
+
+function renderProducts() {
+  document.querySelector('#products-table tbody').innerHTML = PRODUCTS.map(p => `
+    <tr>
+      <td>${p.imageUrl ? `<img class="thumb-sm" src="${p.imageUrl}">` : `<div class="thumb-sm"></div>`}</td>
+      <td><b>${p.brand} ${p.model}</b><br><span class="helper">${p.storage || ''} ${p.color || ''}</span></td>
+      <td>${p.condition}</td>
+      <td class="mono">${fmtPrice(p.price)}</td>
+      <td>${p.stock}</td>
+      <td><span class="status-pill ${p.active !== false ? 'accepted' : 'rejected'}">${p.active !== false ? 'live' : 'hidden'}</span></td>
+      <td class="row-actions">
+        <button class="btn btn-ghost btn-sm" onclick="openImageModal('${p.id}','${p.brand} ${p.model}')">Photo</button>
+        <button class="btn btn-ghost btn-sm" onclick="toggleActive('${p.id}')">${p.active !== false ? 'Hide' : 'Unhide'}</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteProduct('${p.id}')">Delete</button>
+      </td>
+    </tr>
+  `).join('') || `<tr><td colspan="7" class="helper">No stock yet — upload a CSV above to get started.</td></tr>`;
+}
+
+function renderOffers() {
+  document.querySelector('#offers-table tbody').innerHTML = OFFERS.map(o => `
+    <tr>
+      <td>${o.productName}</td>
+      <td class="mono">${fmtPrice(o.listPrice)}</td>
+      <td class="mono" style="color:var(--accent)">${fmtPrice(o.amount)}</td>
+      <td>${o.name}<br><span class="helper">${o.phone}</span></td>
+      <td><span class="status-pill ${o.status}">${o.status}</span></td>
+      <td class="row-actions">
+        ${o.status === 'pending' ? `
+          <button class="btn btn-accept btn-sm" onclick="offerAction('${o.id}','accept')">Accept</button>
+          <button class="btn btn-danger btn-sm" onclick="offerAction('${o.id}','reject')">Reject</button>
+        ` : ''}
+      </td>
+    </tr>
+  `).join('') || `<tr><td colspan="6" class="helper">No offers yet.</td></tr>`;
+}
+
+function renderTradeins() {
+  document.querySelector('#tradeins-table tbody').innerHTML = TRADEINS.map(t => `
+    <tr>
+      <td><div class="photo-strip">${(t.photos||[]).slice(0,3).map(p => `<img src="${p}">`).join('') || '<span class="helper">none</span>'}</div></td>
+      <td><b>${t.brand} ${t.model}</b><br><span class="helper">${t.storage || ''} · ${t.condition || ''}</span></td>
+      <td>${t.type}</td>
+      <td class="mono">${t.askingPrice ? fmtPrice(t.askingPrice) : '—'}</td>
+      <td>${t.name}<br><span class="helper">${t.phone}</span></td>
+      <td><span class="status-pill ${t.status}">${t.status}</span></td>
+      <td class="row-actions">
+        ${t.status === 'pending' ? `
+          <button class="btn btn-accept btn-sm" onclick="tradeinAction('${t.id}','accept')">Accept</button>
+          <button class="btn btn-danger btn-sm" onclick="tradeinAction('${t.id}','reject')">Reject</button>
+        ` : ''}
+      </td>
+    </tr>
+  `).join('') || `<tr><td colspan="7" class="helper">No sell/trade-in submissions yet.</td></tr>`;
+}
+
+async function uploadCsv() {
+  const file = document.getElementById('csv-file').files[0];
+  if (!file) return toast('Choose a CSV file first');
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    const res = await fetch('/api/admin/upload-csv', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    toast(`Synced: ${data.added} added, ${data.updated} updated`);
+    loadAll();
+  } catch (e) { toast(e.message); }
+}
+
+function openImageModal(id, label) {
+  imgTargetId = id;
+  document.getElementById('img-sub').textContent = label;
+  document.getElementById('img-overlay').classList.add('open');
+}
+async function uploadImage() {
+  const file = document.getElementById('img-file').files[0];
+  if (!file) return toast('Choose an image first');
+  const fd = new FormData();
+  fd.append('image', file);
+  try {
+    await fetch(`/api/admin/products/${imgTargetId}/image`, { method: 'POST', body: fd });
+    document.getElementById('img-overlay').classList.remove('open');
+    toast('Photo updated');
+    loadAll();
+  } catch (e) { toast('Upload failed'); }
+}
+
+async function toggleActive(id) {
+  const p = PRODUCTS.find(x => x.id === id);
+  await api(`/api/admin/products/${id}`, { method: 'PUT', body: { active: p.active === false } });
+  loadAll();
+}
+async function deleteProduct(id) {
+  if (!confirm('Delete this listing permanently?')) return;
+  await api(`/api/admin/products/${id}`, { method: 'DELETE' });
+  loadAll();
+}
+async function offerAction(id, action) {
+  await api(`/api/admin/offers/${id}/${action}`, { method: 'POST' });
+  toast(`Offer ${action}ed — confirm with the customer on WhatsApp`);
+  loadAll();
+}
+async function tradeinAction(id, action) {
+  await api(`/api/admin/tradeins/${id}/${action}`, { method: 'POST' });
+  toast(`Submission ${action}ed — confirm with the customer on WhatsApp`);
+  loadAll();
+}
+
+async function loadSettings() {
+  const cfg = await api('/api/admin/config');
+  document.getElementById('s-storename').value = cfg.storeName;
+  document.getElementById('s-whatsapp').value = cfg.whatsappNumber;
+  document.getElementById('s-password').value = cfg.adminPassword;
+}
+async function saveSettings() {
+  await api('/api/admin/config', { method: 'PUT', body: {
+    storeName: document.getElementById('s-storename').value,
+    whatsappNumber: document.getElementById('s-whatsapp').value,
+    adminPassword: document.getElementById('s-password').value
+  }});
+  toast('Settings saved');
+}
+
+(async () => {
+  await checkAuth();
+  await loadAll();
+  await loadSettings();
+})();
+</script>
+</body>
+</html>

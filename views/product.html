@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Device — TheTechMart</title>
+<link rel="icon" type="image/png" href="/img/favicon.png">
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="wrap">
+    <a href="/" class="brand"><img class="logo-mark" src="/img/logo.png" alt="TheTechMart"></a>
+    <div class="nav-links">
+      <a href="/#shop">Shop</a>
+      <a href="/sell">Sell / Trade-in</a>
+    </div>
+    <a href="/sell" class="nav-cta">Get a quote</a>
+  </div>
+</nav>
+
+<div class="wrap">
+  <div class="pd-grid" id="content">
+    <div class="empty">Loading…</div>
+  </div>
+</div>
+
+<!-- Offer modal -->
+<div class="overlay" id="offer-overlay">
+  <div class="modal">
+    <div class="modal-inner">
+      <button class="modal-close" onclick="closeOffer()">&times;</button>
+      <h3>Make an offer</h3>
+      <p class="sub" id="offer-sub"></p>
+      <form id="offer-form">
+        <div class="field">
+          <label>Your offer (ZAR)</label>
+          <input type="number" name="amount" required min="1" placeholder="e.g. 7500">
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Your name</label>
+            <input type="text" name="name" required>
+          </div>
+          <div class="field">
+            <label>WhatsApp number</label>
+            <input type="tel" name="phone" required placeholder="e.g. 0821234567">
+          </div>
+        </div>
+        <div class="field">
+          <label>Note (optional)</label>
+          <textarea name="message" placeholder="Anything we should know?"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">Send offer via WhatsApp</button>
+        <p class="helper">We'll save your offer and open WhatsApp with it pre-filled — just hit send from there. We reply directly to accept, reject, or counter.</p>
+      </form>
+    </div>
+  </div>
+</div>
+
+<footer class="footer">
+  <div class="wrap">
+    <span>© TheTechMart — "the #1 electronics market"</span>
+    <div class="footer-links">
+      <a href="https://wa.me/27716623565" target="_blank" rel="noopener">WhatsApp</a>
+      <a href="mailto:thetechmart2020@gmail.com">Email</a>
+      <a href="https://instagram.com/the_tech_mart" target="_blank" rel="noopener">Instagram</a>
+      <a href="https://facebook.com/TheTechMart" target="_blank" rel="noopener">Facebook</a>
+      <a href="https://x.com/The_Tech_Mart" target="_blank" rel="noopener">X</a>
+    </div>
+  </div>
+</footer>
+
+<script src="/js/common.js"></script>
+<script>
+const id = new URLSearchParams(location.search).get('id');
+let product = null;
+
+async function load() {
+  try {
+    product = await api('/api/products/' + id);
+  } catch (e) {
+    document.getElementById('content').innerHTML = `<div class="empty" style="grid-column:1/-1">Couldn't find that device. <a href="/" style="color:var(--accent)">Back to shop</a></div>`;
+    return;
+  }
+  document.getElementById('content').innerHTML = `
+    <div class="pd-img">${productImage(product)}</div>
+    <div>
+      <span class="pd-tag">${product.condition}</span>
+      <h1 class="pd-title">${product.brand} ${product.model}</h1>
+      <div class="pd-sub">${product.storage || ''}${product.storage && product.color ? ' · ' : ''}${product.color || ''}</div>
+      <div class="pd-price mono">${fmtPrice(product.price)}</div>
+      <div class="pd-price-lbl">LIST PRICE · NEGOTIABLE</div>
+      <div class="specs">
+        <div class="spec-row"><span class="k">Brand</span><span>${product.brand}</span></div>
+        <div class="spec-row"><span class="k">Model</span><span>${product.model}</span></div>
+        ${product.storage ? `<div class="spec-row"><span class="k">Storage</span><span>${product.storage}</span></div>` : ''}
+        ${product.color ? `<div class="spec-row"><span class="k">Color</span><span>${product.color}</span></div>` : ''}
+        <div class="spec-row"><span class="k">Condition</span><span>${product.condition}</span></div>
+        <div class="spec-row"><span class="k">In stock</span><span>${product.stock}</span></div>
+      </div>
+      <div class="pd-actions">
+        <button class="btn btn-primary" onclick="openOffer()">Make an offer</button>
+        <a class="btn btn-ghost" href="/sell">Trade this in instead</a>
+      </div>
+    </div>
+  `;
+}
+
+function openOffer() {
+  document.getElementById('offer-sub').textContent = `${product.brand} ${product.model} — listed at ${fmtPrice(product.price)}`;
+  document.getElementById('offer-overlay').classList.add('open');
+}
+function closeOffer() { document.getElementById('offer-overlay').classList.remove('open'); }
+
+document.getElementById('offer-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const body = { productId: id, amount: fd.get('amount'), name: fd.get('name'), phone: fd.get('phone'), message: fd.get('message') };
+  try {
+    const { whatsappUrl } = await api('/api/offers', { method: 'POST', body });
+    toast('Offer saved — opening WhatsApp…');
+    window.open(whatsappUrl, '_blank');
+    closeOffer();
+    e.target.reset();
+  } catch (err) {
+    toast(err.message);
+  }
+});
+
+load();
+</script>
+</body>
+</html>

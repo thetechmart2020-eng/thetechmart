@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TheTechMart — Devices, negotiated fairly</title>
+<link rel="icon" type="image/png" href="/img/favicon.png">
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="wrap">
+    <a href="/" class="brand"><img class="logo-mark" src="/img/logo.png" alt="TheTechMart"></a>
+    <div class="nav-links">
+      <a href="/#shop">Shop</a>
+      <a href="/sell">Sell / Trade-in</a>
+    </div>
+    <a href="/sell" class="nav-cta">Get a quote</a>
+  </div>
+</nav>
+
+<div class="ticker">
+  <div class="ticker-track" id="ticker"></div>
+</div>
+
+<header class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <div class="eyebrow">Buy · Sell · Trade · Negotiate</div>
+      <h1>Every price here<br>is a starting point.</h1>
+      <p class="lead">Browse real stock at real prices, then put in your own offer — it goes straight to us on WhatsApp. Got a device to sell or trade? We'll quote you back fast.</p>
+      <div class="hero-actions">
+        <a href="#shop" class="btn btn-primary">Browse devices</a>
+        <a href="/sell" class="btn btn-ghost">Sell your device</a>
+      </div>
+    </div>
+    <div class="quote-card">
+      <div class="quote-row"><span class="name">iPhone 13 128GB</span><span class="val">— asking R8 400</span></div>
+      <div class="quote-row"><span class="name">Samsung S22 Ultra</span><span class="val">— asking R9 100</span></div>
+      <div class="quote-row"><span class="name">Your offer</span><span class="mono" style="color:var(--accent)">→ sent via WhatsApp</span></div>
+      <div class="quote-row"><span class="name">Our reply</span><span class="mono" style="color:var(--text-dim)">accepted / countered</span></div>
+    </div>
+  </div>
+</header>
+
+<section class="section" id="shop">
+  <div class="wrap">
+    <div class="section-head">
+      <div>
+        <h2>Current stock</h2>
+        <p>All prices negotiable — make an offer on any listing.</p>
+      </div>
+    </div>
+    <div class="filters">
+      <input type="text" id="f-search" placeholder="Search brand or model…">
+      <select id="f-brand"><option value="">All brands</option></select>
+      <select id="f-condition"><option value="">Any condition</option></select>
+      <select id="f-sort">
+        <option value="newest">Newest first</option>
+        <option value="price_asc">Price: low to high</option>
+        <option value="price_desc">Price: high to low</option>
+      </select>
+    </div>
+    <div class="grid" id="grid"></div>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="wrap">
+    <span>© TheTechMart — "the #1 electronics market"</span>
+    <div class="footer-links">
+      <a href="https://wa.me/27716623565" target="_blank" rel="noopener">WhatsApp</a>
+      <a href="mailto:thetechmart2020@gmail.com">Email</a>
+      <a href="https://instagram.com/the_tech_mart" target="_blank" rel="noopener">Instagram</a>
+      <a href="https://facebook.com/TheTechMart" target="_blank" rel="noopener">Facebook</a>
+      <a href="https://x.com/The_Tech_Mart" target="_blank" rel="noopener">X</a>
+    </div>
+  </div>
+</footer>
+
+<script src="/js/common.js"></script>
+<script>
+let ALL = [];
+
+function tick() {
+  const items = ALL.length ? ALL : [{brand:'iPhone',model:'13',price:8400},{brand:'Samsung',model:'S22',price:9100}];
+  const parts = items.map(p => `<span>${p.brand} ${p.model} <span class="mono">${fmtPrice(p.price)}</span></span>`);
+  document.getElementById('ticker').innerHTML = (parts.concat(parts)).join('<span style="color:var(--line)">/</span>');
+}
+
+function render(list) {
+  const grid = document.getElementById('grid');
+  if (!list.length) {
+    grid.innerHTML = `<div class="empty" style="grid-column:1/-1">No devices match right now — try clearing a filter, or check back soon.</div>`;
+    return;
+  }
+  grid.innerHTML = list.map(p => `
+    <a class="card" href="/product?id=${p.id}">
+      <div class="card-img">${productImage(p)}</div>
+      <div class="card-body">
+        <span class="card-tag">${p.condition}</span>
+        <div class="card-title">${p.brand} ${p.model}</div>
+        <div class="card-sub">${p.storage || ''}${p.storage && p.color ? ' · ' : ''}${p.color || ''}</div>
+        <div class="card-price">${fmtPrice(p.price)} <small>list</small></div>
+      </div>
+    </a>
+  `).join('');
+}
+
+function applyFilters() {
+  const q = document.getElementById('f-search').value.trim();
+  const brand = document.getElementById('f-brand').value;
+  const condition = document.getElementById('f-condition').value;
+  const sort = document.getElementById('f-sort').value;
+  const params = new URLSearchParams({ q, brand, condition, sort });
+  api('/api/products?' + params.toString()).then(render).catch(() => render([]));
+}
+
+async function load() {
+  ALL = await api('/api/products?sort=newest').catch(() => []);
+  render(ALL);
+  tick();
+  const brands = [...new Set(ALL.map(p => p.brand))];
+  document.getElementById('f-brand').innerHTML += brands.map(b => `<option>${b}</option>`).join('');
+  const conditions = [...new Set(ALL.map(p => p.condition))];
+  document.getElementById('f-condition').innerHTML += conditions.map(c => `<option>${c}</option>`).join('');
+}
+
+['f-search','f-brand','f-condition','f-sort'].forEach(id => {
+  document.getElementById(id).addEventListener('input', applyFilters);
+  document.getElementById(id).addEventListener('change', applyFilters);
+});
+
+load();
+</script>
+</body>
+</html>
