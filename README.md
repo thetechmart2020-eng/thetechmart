@@ -32,18 +32,59 @@ I guessed at the exact Facebook/X/Instagram page URLs from the handles you gave 
 resolve to your real pages and adjust the `href`s in the footer of `views/index.html`, `views/product.html`,
 and `views/sell.html` if any are off.
 
-## Getting it running
+## Stack
+
+- **App**: Node + Express (same code runs locally and on Vercel)
+- **Database**: Supabase (Postgres) — products, offers, trade-ins, settings
+- **File storage**: Supabase Storage — product photos and trade-in photos
+- **Hosting**: Vercel (serverless)
+- **Editing in the browser**: StackBlitz, if you want to tweak things without installing anything locally
+
+## One-time setup: Supabase
+
+1. Create a project at [supabase.com](https://supabase.com) (free tier is enough to start).
+2. Open **SQL Editor → New query**, paste in the contents of `supabase/schema.sql` from this project, and run it.
+   This creates the `products`, `offers`, `tradeins`, and `config` tables and seeds one settings row.
+3. Open **Storage** and create two buckets, both set to **public**:
+   - `product-images`
+   - `tradein-photos`
+4. Open **Project Settings → API** and copy two values: the **Project URL** and the **service_role key**
+   (not the `anon` key — the service role key is what lets the server read/write freely; it must never be
+   exposed to the browser, which is why it only ever lives in server environment variables).
+
+## Running it locally
 
 Requires [Node.js](https://nodejs.org) 18+.
 
 ```bash
+cp .env.example .env
+# then edit .env and fill in SUPABASE_URL, SUPABASE_SERVICE_KEY, and a random SESSION_SECRET
 npm install
 npm start
 ```
 
 Then open `http://localhost:3000`. Admin panel is at `http://localhost:3000/admin` — default password is
-`admin123`. **Change this immediately** under Admin → Settings, and also set your real WhatsApp number there
-(country code + number, digits only, e.g. `27821234567` for a South African number).
+`admin123`, taken from the `config` row you seeded via `schema.sql`. **Change it immediately** under
+Admin → Settings, along with your real WhatsApp number if it's ever wrong.
+
+## Deploying to Vercel
+
+1. Push this project to a GitHub repo (or use `vercel` CLI directly from the folder — `npm i -g vercel`, then `vercel`).
+2. In the [Vercel dashboard](https://vercel.com/new), import the repo. Framework preset: "Other" — no build
+   step is needed, Vercel will detect `api/index.js` automatically.
+3. Under **Project Settings → Environment Variables**, add the same three variables from `.env`:
+   `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `SESSION_SECRET`.
+4. Deploy. Vercel gives you a `*.vercel.app` URL immediately; add a custom domain under
+   **Project Settings → Domains** whenever you're ready.
+
+Every subsequent `git push` redeploys automatically.
+
+## Editing in StackBlitz
+
+Push the repo to GitHub, then open `https://stackblitz.com/github/YOUR-USERNAME/YOUR-REPO` to get a full
+in-browser dev environment — handy for quick edits (copy, prices, colors) without installing Node locally.
+Add the same three environment variables under StackBlitz's project settings (or a `.env` file in the
+StackBlitz workspace) so it can reach your Supabase project.
 
 ## Uploading your price list
 
@@ -55,7 +96,8 @@ Apple,iPhone 13,8400,Good,128GB,Midnight,3,
 ```
 
 - `imageUrl` is optional — leave it blank and the listing shows a clean placeholder card until you add a
-  real photo (Admin → Stock → Photo button, or fill in the column with a URL to a photo you have the rights to use).
+  real photo (Admin → Stock → Photo button, which uploads straight to Supabase Storage, or fill in the
+  column with a URL to a photo you have the rights to use).
 - Re-uploading a CSV updates matching rows (same brand+model+storage+condition) instead of duplicating them,
   so you can just re-upload your whole list whenever prices change.
 - A sample file is included: `sample-price-list.csv`.
@@ -66,7 +108,7 @@ I didn't wire this up to scrape manufacturer or stock-photo sites — those imag
 pulling them in automatically isn't something I can do. Two real options if you want photos without
 photographing every unit yourself:
 1. **Best for trust**: photograph your own stock (even a phone-camera shot on a plain background works
-   well) and upload it per listing.
+   well) and upload it per listing — it goes straight into Supabase Storage.
 2. **Faster to scale**: use a licensed product-image API or dataset (e.g. a paid provider like Icecat,
    or your supplier's official press kit if their terms allow reuse) and put the URL straight in the
    `imageUrl` CSV column.
@@ -84,14 +126,6 @@ the `/api/offers` and `/api/tradeins` routes) to swap in that API once you have 
 
 ## Data storage
 
-Everything (products, offers, trade-in submissions, settings) is stored in `data/db.json` — a simple file,
-no database server needed. Fine for getting started; if you outgrow it, the `db.js` file is the only place
-that would need to change to move to a real database (e.g. Postgres).
-
-## Deploying it live
-
-This is a standard Node/Express app, so it runs on any host that supports Node: Render, Railway, Fly.io,
-a VPS, etc. Two things to set before going live:
-- Change the `secret` in `server.js`'s session config to something random.
-- Make sure `data/`, `public/uploads/images/`, and `public/uploads/tradeins/` are writable and, ideally,
-  on persistent storage (some hosts wipe the filesystem on redeploy — if so, point these at a mounted volume).
+Everything (products, offers, trade-in submissions, settings) lives in Supabase Postgres; uploaded photos
+live in Supabase Storage. `db.js` is the only file that talks to Supabase directly — if you ever want to
+swap data providers, that's the one file to change.

@@ -1,42 +1,30 @@
+require('dotenv').config();
+
 const express = require('express');
-const session = require('express-session');
+const cookieParser = require('cookie-parser');
 const multer = require('multer');
 const { parse } = require('csv-parse/sync');
-const { v4: uuid } = require('uuid');
 const path = require('path');
-const fs = require('fs');
-const { readDB, writeDB } = require('./db');
+const db = require('./db');
+const { uploadBuffer } = require('./lib/storage');
+const { setAdminCookie, clearAdminCookie, isAdminRequest } = require('./lib/auth');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(session({
-  secret: 'thetechmart-secret-change-me',
-  resave: false,
-  saveUninitialized: false,
-  cookie: { maxAge: 1000 * 60 * 60 * 8 }
-}));
+app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ---------- Uploads ----------
-const csvUpload = multer({ dest: path.join(__dirname, 'data', 'tmp') });
-const imageStorage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, path.join(__dirname, 'public/uploads/images')),
-  filename: (req, file, cb) => cb(null, uuid() + path.extname(file.originalname))
-});
-const imageUpload = multer({ storage: imageStorage });
-
-const tradeinStorage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, path.join(__dirname, 'public/uploads/tradeins')),
-  filename: (req, file, cb) => cb(null, uuid() + path.extname(file.originalname))
-});
-const tradeinUpload = multer({ storage: tradeinStorage });
+// ---------- Uploads (memory — files go straight to Supabase Storage, never to disk) ----------
+const csvUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } });
+const imageUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
+const tradeinUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
 
 // ---------- Helpers ----------
 function requireAdmin(req, res, next) {
-  if (req.session && req.session.isAdmin) return next();
+  if (isAdminRequest(req)) return next();
   return res.status(401).json({ error: 'Not authenticated' });
 }
 
@@ -44,20 +32,22 @@ function waLink(number, message) {
   return `https://wa.me/${number}?text=${encodeURIComponent(message)}`;
 }
 
-function publicProduct(p) {
-  return p; // all fields are safe to expose
+function asyncRoute(fn) {
+  return (req, res) => fn(req, res).catch((err) => {
+    console.error(err);
+    res.status(500).json({ error: err.message || 'Server error' });
+  });
 }
 
 // ================= PUBLIC API =================
 
-app.get('/api/config', (req, res) => {
-  const db = readDB();
-  res.json({ storeName: db.config.storeName });
-});
+app.get('/api/config', asyncRoute(async (req, res) => {
+  const cfg = await db.getConfig();
+  res.json({ storeName: cfg.storeName });
+}));
 
-app.get('/api/products', (req, res) => {
-  const db = readDB();
-  let list = db.products.filter(p => p.active !== false);
+app.get('/api/products', asyncRoute(async (req, res) => {
+  let list = await db.listProducts({ activeOnly: true });
   const { q, brand, condition, minPrice, maxPrice, sort } = req.query;
   if (q) {
     const s = q.toLowerCase();
@@ -70,226 +60,166 @@ app.get('/api/products', (req, res) => {
   if (sort === 'price_asc') list = [...list].sort((a, b) => a.price - b.price);
   if (sort === 'price_desc') list = [...list].sort((a, b) => b.price - a.price);
   if (sort === 'newest') list = [...list].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  res.json(list.map(publicProduct));
-});
+  res.json(list);
+}));
 
-app.get('/api/products/:id', (req, res) => {
-  const db = readDB();
-  const p = db.products.find(x => x.id === req.params.id);
+app.get('/api/products/:id', asyncRoute(async (req, res) => {
+  const p = await db.getProduct(req.params.id);
   if (!p) return res.status(404).json({ error: 'Not found' });
   res.json(p);
-});
+}));
 
-// Submit an offer / negotiation on a product
-app.post('/api/offers', (req, res) => {
+app.post('/api/offers', asyncRoute(async (req, res) => {
   const { productId, amount, name, phone, message } = req.body;
-  const db = readDB();
-  const product = db.products.find(p => p.id === productId);
+  const product = await db.getProduct(productId);
   if (!product) return res.status(404).json({ error: 'Product not found' });
   if (!amount || !name || !phone) return res.status(400).json({ error: 'Missing required fields' });
 
-  const offer = {
-    id: uuid(),
-    productId,
-    productName: `${product.brand} ${product.model}`,
-    listPrice: product.price,
-    amount: Number(amount),
-    name, phone,
-    message: message || '',
-    status: 'pending',
-    createdAt: new Date().toISOString()
-  };
-  db.offers.push(offer);
-  writeDB(db);
+  const offer = await db.addOffer({
+    productId, productName: `${product.brand} ${product.model}`, listPrice: product.price,
+    amount: Number(amount), name, phone, message: message || ''
+  });
 
+  const cfg = await db.getConfig();
   const waMessage = `Hi TheTechMart! I'd like to make an offer.\n\nDevice: ${offer.productName}\nList price: R${offer.listPrice}\nMy offer: R${offer.amount}\nName: ${name}\nContact: ${phone}\n${message ? 'Note: ' + message : ''}\n\n(Offer ref: ${offer.id.slice(0, 8)})`;
 
-  res.json({ offer, whatsappUrl: waLink(db.config.whatsappNumber, waMessage) });
-});
+  res.json({ offer, whatsappUrl: waLink(cfg.whatsappNumber, waMessage) });
+}));
 
-// Submit a device for sale / trade-in
-app.post('/api/tradeins', tradeinUpload.array('photos', 6), (req, res) => {
+app.post('/api/tradeins', tradeinUpload.array('photos', 6), asyncRoute(async (req, res) => {
   const { brand, model, storage, condition, askingPrice, name, phone, notes, type } = req.body;
   if (!brand || !model || !name || !phone) return res.status(400).json({ error: 'Missing required fields' });
 
-  const db = readDB();
-  const photos = (req.files || []).map(f => `/uploads/tradeins/${f.filename}`);
-  const submission = {
-    id: uuid(),
-    type: type === 'trade' ? 'trade' : 'sell', // 'sell' = cash sale to store, 'trade' = trade toward another device
-    brand, model, storage: storage || '', condition: condition || '',
-    askingPrice: askingPrice ? Number(askingPrice) : null,
-    name, phone, notes: notes || '',
-    photos,
-    status: 'pending',
-    createdAt: new Date().toISOString()
-  };
-  db.tradeins.push(submission);
-  writeDB(db);
+  const photos = [];
+  for (const file of req.files || []) {
+    photos.push(await uploadBuffer('tradein-photos', file));
+  }
 
+  const submission = await db.addTradein({
+    type: type === 'trade' ? 'trade' : 'sell', brand, model, storage: storage || '', condition: condition || '',
+    askingPrice: askingPrice ? Number(askingPrice) : null, name, phone, notes: notes || '', photos
+  });
+
+  const cfg = await db.getConfig();
   const waMessage = `Hi TheTechMart! I'd like to ${submission.type === 'trade' ? 'trade in' : 'sell'} a device.\n\nDevice: ${brand} ${model}\nStorage: ${storage || 'N/A'}\nCondition: ${condition || 'N/A'}\n${askingPrice ? 'Asking price: R' + askingPrice : ''}\nName: ${name}\nContact: ${phone}\n${notes ? 'Notes: ' + notes : ''}\n\n(Ref: ${submission.id.slice(0, 8)})`;
 
-  res.json({ submission, whatsappUrl: waLink(db.config.whatsappNumber, waMessage) });
-});
+  res.json({ submission, whatsappUrl: waLink(cfg.whatsappNumber, waMessage) });
+}));
 
 // ================= ADMIN AUTH =================
 
-app.post('/api/admin/login', (req, res) => {
+app.post('/api/admin/login', asyncRoute(async (req, res) => {
   const { password } = req.body;
-  const db = readDB();
-  if (password === db.config.adminPassword) {
-    req.session.isAdmin = true;
+  const cfg = await db.getConfig();
+  if (password === cfg.adminPassword) {
+    setAdminCookie(res);
     return res.json({ ok: true });
   }
   res.status(401).json({ error: 'Incorrect password' });
-});
+}));
 
 app.post('/api/admin/logout', (req, res) => {
-  req.session.destroy(() => res.json({ ok: true }));
+  clearAdminCookie(res);
+  res.json({ ok: true });
 });
 
 app.get('/api/admin/session', (req, res) => {
-  res.json({ isAdmin: !!(req.session && req.session.isAdmin) });
+  res.json({ isAdmin: isAdminRequest(req) });
 });
 
 // ================= ADMIN: PRODUCTS =================
 
-app.get('/api/admin/products', requireAdmin, (req, res) => {
-  const db = readDB();
-  res.json(db.products);
-});
+app.get('/api/admin/products', requireAdmin, asyncRoute(async (req, res) => {
+  res.json(await db.listProducts());
+}));
 
 // Upload price list CSV. Expected columns:
 // brand,model,price,condition,storage,color,stock,imageUrl(optional)
-app.post('/api/admin/upload-csv', requireAdmin, csvUpload.single('file'), (req, res) => {
+app.post('/api/admin/upload-csv', requireAdmin, csvUpload.single('file'), asyncRoute(async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-  const content = fs.readFileSync(req.file.path, 'utf-8');
-  fs.unlinkSync(req.file.path);
 
   let records;
   try {
-    records = parse(content, { columns: true, skip_empty_lines: true, trim: true });
+    records = parse(req.file.buffer.toString('utf-8'), { columns: true, skip_empty_lines: true, trim: true });
   } catch (e) {
     return res.status(400).json({ error: 'Could not parse CSV: ' + e.message });
   }
 
-  const db = readDB();
-  let added = 0, updated = 0;
-
+  const rows = [];
   for (const row of records) {
     if (!row.brand || !row.model || !row.price) continue;
     const price = Number(String(row.price).replace(/[^0-9.]/g, ''));
     if (Number.isNaN(price)) continue;
-
-    // Match existing product by brand+model+storage+condition to update, else create new
-    const key = `${row.brand}|${row.model}|${row.storage || ''}|${row.condition || ''}`.toLowerCase();
-    let product = db.products.find(p =>
-      `${p.brand}|${p.model}|${p.storage}|${p.condition}`.toLowerCase() === key
-    );
-
-    const data = {
-      brand: row.brand.trim(),
-      model: row.model.trim(),
-      price,
+    rows.push({
+      brand: row.brand.trim(), model: row.model.trim(), price,
       condition: row.condition ? row.condition.trim() : 'New',
       storage: row.storage ? row.storage.trim() : '',
       color: row.color ? row.color.trim() : '',
       stock: row.stock ? Number(row.stock) : 1,
-      imageUrl: row.imageUrl ? row.imageUrl.trim() : (product ? product.imageUrl : ''),
-      active: true
-    };
-
-    if (product) {
-      Object.assign(product, data);
-      updated++;
-    } else {
-      db.products.push({
-        id: uuid(),
-        ...data,
-        createdAt: new Date().toISOString()
-      });
-      added++;
-    }
+      imageUrl: row.imageUrl ? row.imageUrl.trim() : ''
+    });
   }
 
-  writeDB(db);
+  const { added, updated } = await db.syncProductsFromRows(rows);
   res.json({ ok: true, added, updated, total: records.length });
-});
+}));
 
-app.put('/api/admin/products/:id', requireAdmin, (req, res) => {
-  const db = readDB();
-  const p = db.products.find(x => x.id === req.params.id);
+app.put('/api/admin/products/:id', requireAdmin, asyncRoute(async (req, res) => {
+  const p = await db.updateProduct(req.params.id, req.body);
   if (!p) return res.status(404).json({ error: 'Not found' });
-  Object.assign(p, req.body);
-  writeDB(db);
   res.json(p);
-});
+}));
 
-app.delete('/api/admin/products/:id', requireAdmin, (req, res) => {
-  const db = readDB();
-  db.products = db.products.filter(x => x.id !== req.params.id);
-  writeDB(db);
+app.delete('/api/admin/products/:id', requireAdmin, asyncRoute(async (req, res) => {
+  await db.deleteProduct(req.params.id);
   res.json({ ok: true });
-});
+}));
 
-app.post('/api/admin/products/:id/image', requireAdmin, imageUpload.single('image'), (req, res) => {
-  const db = readDB();
-  const p = db.products.find(x => x.id === req.params.id);
+app.post('/api/admin/products/:id/image', requireAdmin, imageUpload.single('image'), asyncRoute(async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No image uploaded' });
+  const imageUrl = await uploadBuffer('product-images', req.file);
+  const p = await db.updateProduct(req.params.id, { imageUrl });
   if (!p) return res.status(404).json({ error: 'Not found' });
-  p.imageUrl = `/uploads/images/${req.file.filename}`;
-  writeDB(db);
   res.json(p);
-});
+}));
 
 // ================= ADMIN: OFFERS =================
 
-app.get('/api/admin/offers', requireAdmin, (req, res) => {
-  const db = readDB();
-  res.json(db.offers.slice().reverse());
-});
+app.get('/api/admin/offers', requireAdmin, asyncRoute(async (req, res) => {
+  res.json(await db.listOffers());
+}));
 
-app.post('/api/admin/offers/:id/:action', requireAdmin, (req, res) => {
+app.post('/api/admin/offers/:id/:action', requireAdmin, asyncRoute(async (req, res) => {
   const { id, action } = req.params;
   if (!['accept', 'reject'].includes(action)) return res.status(400).json({ error: 'Invalid action' });
-  const db = readDB();
-  const offer = db.offers.find(o => o.id === id);
+  const offer = await db.updateOfferStatus(id, action === 'accept' ? 'accepted' : 'rejected');
   if (!offer) return res.status(404).json({ error: 'Not found' });
-  offer.status = action === 'accept' ? 'accepted' : 'rejected';
-  writeDB(db);
   res.json(offer);
-});
+}));
 
 // ================= ADMIN: TRADE-INS =================
 
-app.get('/api/admin/tradeins', requireAdmin, (req, res) => {
-  const db = readDB();
-  res.json(db.tradeins.slice().reverse());
-});
+app.get('/api/admin/tradeins', requireAdmin, asyncRoute(async (req, res) => {
+  res.json(await db.listTradeins());
+}));
 
-app.post('/api/admin/tradeins/:id/:action', requireAdmin, (req, res) => {
+app.post('/api/admin/tradeins/:id/:action', requireAdmin, asyncRoute(async (req, res) => {
   const { id, action } = req.params;
   if (!['accept', 'reject'].includes(action)) return res.status(400).json({ error: 'Invalid action' });
-  const db = readDB();
-  const t = db.tradeins.find(x => x.id === id);
+  const t = await db.updateTradeinStatus(id, action === 'accept' ? 'accepted' : 'rejected');
   if (!t) return res.status(404).json({ error: 'Not found' });
-  t.status = action === 'accept' ? 'accepted' : 'rejected';
-  writeDB(db);
   res.json(t);
-});
+}));
 
 // ================= ADMIN: SETTINGS =================
 
-app.get('/api/admin/config', requireAdmin, (req, res) => {
-  const db = readDB();
-  res.json(db.config);
-});
+app.get('/api/admin/config', requireAdmin, asyncRoute(async (req, res) => {
+  res.json(await db.getConfig());
+}));
 
-app.put('/api/admin/config', requireAdmin, (req, res) => {
-  const db = readDB();
-  Object.assign(db.config, req.body);
-  writeDB(db);
-  res.json(db.config);
-});
+app.put('/api/admin/config', requireAdmin, asyncRoute(async (req, res) => {
+  res.json(await db.updateConfig(req.body));
+}));
 
 // ================= PAGES =================
 
@@ -299,4 +229,8 @@ app.get('/sell', (req, res) => res.sendFile(path.join(__dirname, 'views/sell.htm
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'views/admin/login.html')));
 app.get('/admin/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'views/admin/dashboard.html')));
 
-app.listen(PORT, () => console.log(`TheTechMart running at http://localhost:${PORT}`));
+if (require.main === module) {
+  app.listen(PORT, () => console.log(`TheTechMart running at http://localhost:${PORT}`));
+}
+
+module.exports = app;
