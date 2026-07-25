@@ -57,6 +57,35 @@ insert into config (id, store_name, whatsapp_number, admin_password)
 values (1, 'TheTechMart', '27716623565', 'admin123')
 on conflict (id) do nothing;
 
+-- Orders: created automatically when an offer or trade-in is accepted, then tracked
+-- through to completion. 'sale' = a device going out to a customer; 'purchase' = a
+-- device coming in from a customer (via trade-in or straight sell-to-store).
+create table if not exists orders (
+  id uuid primary key default gen_random_uuid(),
+  type text not null, -- 'sale' | 'purchase'
+  source text not null, -- 'offer' | 'tradein' | 'manual'
+  source_id uuid,
+  product_id uuid references products(id) on delete set null,
+  customer_name text not null,
+  customer_phone text not null,
+  amount numeric not null default 0,
+  status text default 'new', -- new -> paid -> completed (or cancelled)
+  notes text default '',
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+-- Lightweight first-party analytics — no third-party script/cookie needed.
+create table if not exists events (
+  id bigint generated always as identity primary key,
+  type text not null, -- 'page_view' | 'product_view' | 'offer_submitted' | 'tradein_submitted'
+  path text,
+  product_id uuid references products(id) on delete set null,
+  created_at timestamptz default now()
+);
+create index if not exists events_type_created_idx on events (type, created_at);
+create index if not exists events_product_idx on events (product_id);
+
 -- Row Level Security: the app only ever talks to Supabase using the SERVICE ROLE
 -- key from the server, which bypasses RLS entirely — so RLS is enabled here purely
 -- as a safety net in case the anon/public key is ever used against these tables
@@ -66,3 +95,5 @@ alter table products enable row level security;
 alter table offers enable row level security;
 alter table tradeins enable row level security;
 alter table config enable row level security;
+alter table orders enable row level security;
+alter table events enable row level security;

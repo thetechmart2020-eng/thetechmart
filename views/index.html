@@ -4,8 +4,23 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TheTechMart — Devices, negotiated fairly</title>
+<meta name="description" content="Buy, sell, and trade phones at TheTechMart. Every listed price is negotiable — make an offer straight over WhatsApp.">
+<meta property="og:title" content="TheTechMart — Devices, negotiated fairly">
+<meta property="og:description" content="Buy, sell, and trade phones at TheTechMart. Every listed price is negotiable — make an offer straight over WhatsApp.">
+<meta property="og:image" content="/img/logo.png">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/png" href="/img/favicon.png">
 <link rel="stylesheet" href="/css/style.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "ElectronicsStore",
+  "name": "TheTechMart",
+  "description": "the #1 electronics market — phones bought, sold, and traded, all prices negotiable.",
+  "image": "/img/logo.png"
+}
+</script>
 </head>
 <body>
 
@@ -133,6 +148,7 @@ async function load() {
 });
 
 load();
+api('/api/track', { method: 'POST', body: { type: 'page_view', path: '/' } }).catch(() => {});
 </script>
 </body>
 </html>

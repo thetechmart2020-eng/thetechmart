@@ -5,6 +5,7 @@ const cookieParser = require('cookie-parser');
 const multer = require('multer');
 const { parse } = require('csv-parse/sync');
 const path = require('path');
+const fs = require('fs');
 const db = require('./db');
 const { uploadBuffer } = require('./lib/storage');
 const { setAdminCookie, clearAdminCookie, isAdminRequest } = require('./lib/auth');
@@ -69,6 +70,14 @@ app.get('/api/products/:id', asyncRoute(async (req, res) => {
   res.json(p);
 }));
 
+app.post('/api/track', asyncRoute(async (req, res) => {
+  const { type, path: p, productId } = req.body;
+  const allowed = ['page_view', 'product_view', 'offer_submitted', 'tradein_submitted'];
+  if (!allowed.includes(type)) return res.status(400).json({ error: 'Invalid event type' });
+  await db.logEvent({ type, path: p, productId });
+  res.json({ ok: true });
+}));
+
 app.post('/api/offers', asyncRoute(async (req, res) => {
   const { productId, amount, name, phone, message } = req.body;
   const product = await db.getProduct(productId);
@@ -79,6 +88,7 @@ app.post('/api/offers', asyncRoute(async (req, res) => {
     productId, productName: `${product.brand} ${product.model}`, listPrice: product.price,
     amount: Number(amount), name, phone, message: message || ''
   });
+  await db.logEvent({ type: 'offer_submitted', productId }).catch(() => {});
 
   const cfg = await db.getConfig();
   const waMessage = `Hi TheTechMart! I'd like to make an offer.\n\nDevice: ${offer.productName}\nList price: R${offer.listPrice}\nMy offer: R${offer.amount}\nName: ${name}\nContact: ${phone}\n${message ? 'Note: ' + message : ''}\n\n(Offer ref: ${offer.id.slice(0, 8)})`;
@@ -99,6 +109,7 @@ app.post('/api/tradeins', tradeinUpload.array('photos', 6), asyncRoute(async (re
     type: type === 'trade' ? 'trade' : 'sell', brand, model, storage: storage || '', condition: condition || '',
     askingPrice: askingPrice ? Number(askingPrice) : null, name, phone, notes: notes || '', photos
   });
+  await db.logEvent({ type: 'tradein_submitted' }).catch(() => {});
 
   const cfg = await db.getConfig();
   const waMessage = `Hi TheTechMart! I'd like to ${submission.type === 'trade' ? 'trade in' : 'sell'} a device.\n\nDevice: ${brand} ${model}\nStorage: ${storage || 'N/A'}\nCondition: ${condition || 'N/A'}\n${askingPrice ? 'Asking price: R' + askingPrice : ''}\nName: ${name}\nContact: ${phone}\n${notes ? 'Notes: ' + notes : ''}\n\n(Ref: ${submission.id.slice(0, 8)})`;
@@ -192,9 +203,14 @@ app.get('/api/admin/offers', requireAdmin, asyncRoute(async (req, res) => {
 app.post('/api/admin/offers/:id/:action', requireAdmin, asyncRoute(async (req, res) => {
   const { id, action } = req.params;
   if (!['accept', 'reject'].includes(action)) return res.status(400).json({ error: 'Invalid action' });
-  const offer = await db.updateOfferStatus(id, action === 'accept' ? 'accepted' : 'rejected');
-  if (!offer) return res.status(404).json({ error: 'Not found' });
-  res.json(offer);
+  if (action === 'reject') {
+    const offer = await db.updateOfferStatus(id, 'rejected');
+    if (!offer) return res.status(404).json({ error: 'Not found' });
+    return res.json(offer);
+  }
+  const result = await db.acceptOffer(id);
+  if (!result) return res.status(404).json({ error: 'Not found' });
+  res.json(result.offer);
 }));
 
 // ================= ADMIN: TRADE-INS =================
@@ -206,9 +222,32 @@ app.get('/api/admin/tradeins', requireAdmin, asyncRoute(async (req, res) => {
 app.post('/api/admin/tradeins/:id/:action', requireAdmin, asyncRoute(async (req, res) => {
   const { id, action } = req.params;
   if (!['accept', 'reject'].includes(action)) return res.status(400).json({ error: 'Invalid action' });
-  const t = await db.updateTradeinStatus(id, action === 'accept' ? 'accepted' : 'rejected');
-  if (!t) return res.status(404).json({ error: 'Not found' });
-  res.json(t);
+  if (action === 'reject') {
+    const t = await db.updateTradeinStatus(id, 'rejected');
+    if (!t) return res.status(404).json({ error: 'Not found' });
+    return res.json(t);
+  }
+  const result = await db.acceptTradein(id);
+  if (!result) return res.status(404).json({ error: 'Not found' });
+  res.json(result.tradein);
+}));
+
+// ================= ADMIN: ORDERS =================
+
+app.get('/api/admin/orders', requireAdmin, asyncRoute(async (req, res) => {
+  res.json(await db.listOrders());
+}));
+
+app.put('/api/admin/orders/:id', requireAdmin, asyncRoute(async (req, res) => {
+  const o = await db.updateOrder(req.params.id, req.body);
+  if (!o) return res.status(404).json({ error: 'Not found' });
+  res.json(o);
+}));
+
+// ================= ADMIN: ANALYTICS =================
+
+app.get('/api/admin/analytics', requireAdmin, asyncRoute(async (req, res) => {
+  res.json(await db.getAnalyticsSummary());
 }));
 
 // ================= ADMIN: SETTINGS =================
@@ -223,8 +262,52 @@ app.put('/api/admin/config', requireAdmin, asyncRoute(async (req, res) => {
 
 // ================= PAGES =================
 
+app.get('/sitemap.xml', asyncRoute(async (req, res) => {
+  const base = `${req.protocol}://${req.get('host')}`;
+  const products = await db.listProducts({ activeOnly: true });
+  const staticUrls = ['', '/sell'];
+  const urls = [
+    ...staticUrls.map((p) => `<url><loc>${base}${p}</loc><changefreq>daily</changefreq></url>`),
+    ...products.map((p) => `<url><loc>${base}/product?id=${p.id}</loc><changefreq>weekly</changefreq></url>`)
+  ];
+  res.set('Content-Type', 'application/xml');
+  res.send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join('\n')}\n</urlset>`);
+}));
+
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'views/index.html')));
-app.get('/product', (req, res) => res.sendFile(path.join(__dirname, 'views/product.html')));
+
+// Server-rendered so shared links (WhatsApp, Facebook, Google) show the right
+// device name/price/photo instead of generic "TheTechMart" text for every link.
+app.get('/product', asyncRoute(async (req, res) => {
+  const id = req.query.id;
+  const template = fs.readFileSync(path.join(__dirname, 'views/product.html'), 'utf-8');
+  const product = id ? await db.getProduct(id).catch(() => null) : null;
+
+  const title = product ? `${product.brand} ${product.model} — ${fmtR(product.price)} | TheTechMart` : 'Device — TheTechMart';
+  const description = product
+    ? `${product.brand} ${product.model}${product.storage ? ' · ' + product.storage : ''} — ${product.condition}, listed at ${fmtR(product.price)} and negotiable. Message us on WhatsApp to make an offer.`
+    : 'Browse negotiable phone deals at TheTechMart.';
+  const image = product && product.imageUrl ? `${req.protocol}://${req.get('host')}${product.imageUrl}` : `${req.protocol}://${req.get('host')}/img/logo.png`;
+  const url = `${req.protocol}://${req.get('host')}${req.originalUrl}`;
+
+  const html = template
+    .replace('<title>Device — TheTechMart</title>', `<title>${escapeHtml(title)}</title>
+<meta name="description" content="${escapeHtml(description)}">
+<meta property="og:title" content="${escapeHtml(title)}">
+<meta property="og:description" content="${escapeHtml(description)}">
+<meta property="og:image" content="${escapeHtml(image)}">
+<meta property="og:url" content="${escapeHtml(url)}">
+<meta property="og:type" content="product">
+<meta name="twitter:card" content="summary_large_image">`);
+
+  res.send(html);
+}));
+
+function fmtR(n) { return 'R' + Number(n).toLocaleString('en-ZA'); }
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
 app.get('/sell', (req, res) => res.sendFile(path.join(__dirname, 'views/sell.html')));
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'views/admin/login.html')));
 app.get('/admin/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'views/admin/dashboard.html')));

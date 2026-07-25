@@ -25,6 +25,11 @@ const tradeinOut = (r) => ({
   notes: r.notes, photos: r.photos || [], status: r.status, createdAt: r.created_at
 });
 const configOut = (r) => ({ storeName: r.store_name, whatsappNumber: r.whatsapp_number, adminPassword: r.admin_password });
+const orderOut = (r) => ({
+  id: r.id, type: r.type, source: r.source, sourceId: r.source_id, productId: r.product_id,
+  customerName: r.customer_name, customerPhone: r.customer_phone, amount: Number(r.amount),
+  status: r.status, notes: r.notes, createdAt: r.created_at, updatedAt: r.updated_at
+});
 
 // ---------- config ----------
 async function getConfig() {
@@ -105,6 +110,31 @@ async function updateOfferStatus(id, status) {
   return data ? offerOut(data) : null;
 }
 
+// Accepting an offer: mark it accepted, create a "sale" order, and take one unit off
+// stock (hiding the listing if that was the last one).
+async function acceptOffer(id) {
+  const { data: offerRow, error: offerErr } = await supabase.from('offers').update({ status: 'accepted' }).eq('id', id).select().maybeSingle();
+  check(offerErr);
+  if (!offerRow) return null;
+  const offer = offerOut(offerRow);
+
+  if (offer.productId) {
+    const product = await getProduct(offer.productId);
+    if (product) {
+      const nextStock = Math.max(0, (product.stock || 0) - 1);
+      await updateProduct(product.id, { stock: nextStock, active: nextStock > 0 });
+    }
+  }
+
+  const order = await addOrder({
+    type: 'sale', source: 'offer', sourceId: offer.id, productId: offer.productId,
+    customerName: offer.name, customerPhone: offer.phone, amount: offer.amount,
+    notes: offer.message || ''
+  });
+
+  return { offer, order };
+}
+
 // ---------- trade-ins ----------
 async function addTradein(t) {
   const row = {
@@ -125,6 +155,24 @@ async function updateTradeinStatus(id, status) {
   const { data, error } = await supabase.from('tradeins').update({ status }).eq('id', id).select().maybeSingle();
   check(error);
   return data ? tradeinOut(data) : null;
+}
+
+// Accepting a trade-in/sell-in: mark it accepted and create a "purchase" order
+// (the device coming in — no product_id yet since it isn't listed for sale until
+// you add it as stock separately).
+async function acceptTradein(id) {
+  const { data: row, error } = await supabase.from('tradeins').update({ status: 'accepted' }).eq('id', id).select().maybeSingle();
+  check(error);
+  if (!row) return null;
+  const tradein = tradeinOut(row);
+
+  const order = await addOrder({
+    type: 'purchase', source: 'tradein', sourceId: tradein.id, productId: null,
+    customerName: tradein.name, customerPhone: tradein.phone, amount: tradein.askingPrice || 0,
+    notes: `${tradein.brand} ${tradein.model} ${tradein.storage || ''} · ${tradein.condition || ''}`.trim()
+  });
+
+  return { tradein, order };
 }
 
 // ---------- CSV price-list sync ----------
@@ -160,9 +208,76 @@ async function syncProductsFromRows(rows) {
   return { added: toInsert.length, updated: updates.length };
 }
 
+// ---------- orders ----------
+async function addOrder(o) {
+  const row = {
+    type: o.type, source: o.source, source_id: o.sourceId || null, product_id: o.productId || null,
+    customer_name: o.customerName, customer_phone: o.customerPhone, amount: o.amount || 0,
+    status: 'new', notes: o.notes || ''
+  };
+  const { data, error } = await supabase.from('orders').insert(row).select().single();
+  check(error);
+  return orderOut(data);
+}
+async function listOrders() {
+  const { data, error } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
+  check(error);
+  return data.map(orderOut);
+}
+async function updateOrder(id, patch) {
+  const row = { updated_at: new Date().toISOString() };
+  if (patch.status !== undefined) row.status = patch.status;
+  if (patch.notes !== undefined) row.notes = patch.notes;
+  if (patch.amount !== undefined) row.amount = patch.amount;
+  const { data, error } = await supabase.from('orders').update(row).eq('id', id).select().maybeSingle();
+  check(error);
+  return data ? orderOut(data) : null;
+}
+
+// ---------- events (lightweight first-party analytics) ----------
+async function logEvent({ type, path, productId }) {
+  const { error } = await supabase.from('events').insert({ type, path: path || null, product_id: productId || null });
+  check(error);
+}
+async function getAnalyticsSummary() {
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+  const countOf = async (type) => {
+    const { count, error } = await supabase.from('events').select('*', { count: 'exact', head: true })
+      .eq('type', type).gte('created_at', since);
+    check(error);
+    return count || 0;
+  };
+
+  const [pageViews, productViews, offersSubmitted, tradeinsSubmitted] = await Promise.all([
+    countOf('page_view'), countOf('product_view'), countOf('offer_submitted'), countOf('tradein_submitted')
+  ]);
+
+  // Top viewed products: pull recent product_view events and tally in memory
+  // (fine at small-business scale; a SQL view/RPC would be the move at higher volume).
+  const { data: viewRows, error: viewErr } = await supabase
+    .from('events').select('product_id').eq('type', 'product_view').gte('created_at', since)
+    .not('product_id', 'is', null).limit(5000);
+  check(viewErr);
+
+  const tally = new Map();
+  for (const r of viewRows) tally.set(r.product_id, (tally.get(r.product_id) || 0) + 1);
+  const topIds = [...tally.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+  const topProducts = [];
+  for (const [productId, views] of topIds) {
+    const p = await getProduct(productId);
+    if (p) topProducts.push({ id: p.id, brand: p.brand, model: p.model, views });
+  }
+
+  return { pageViews, productViews, offersSubmitted, tradeinsSubmitted, topProducts };
+}
+
 module.exports = {
   getConfig, updateConfig,
   listProducts, getProduct, insertProduct, updateProduct, deleteProduct, syncProductsFromRows,
-  addOffer, listOffers, updateOfferStatus,
-  addTradein, listTradeins, updateTradeinStatus
+  addOffer, listOffers, updateOfferStatus, acceptOffer,
+  addTradein, listTradeins, updateTradeinStatus, acceptTradein,
+  addOrder, listOrders, updateOrder,
+  logEvent, getAnalyticsSummary
 };

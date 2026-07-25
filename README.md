@@ -32,6 +32,22 @@ I guessed at the exact Facebook/X/Instagram page URLs from the handles you gave 
 resolve to your real pages and adjust the `href`s in the footer of `views/index.html`, `views/product.html`,
 and `views/sell.html` if any are off.
 
+## What's new: search/SEO, analytics, order tracking
+
+**If your site is already live**, run one more migration before these work — open Supabase → SQL Editor →
+New query, paste in the contents of `supabase/migration_002_orders_analytics.sql`, and run it. (Fresh
+installs don't need this — `schema.sql` already includes everything.)
+
+- **SEO**: product pages now render a real `<title>`, description, and Open Graph image server-side, so a
+  link shared on WhatsApp/Facebook shows the actual device and price instead of generic text. There's also
+  a `/sitemap.xml` (auto-generated from your live stock) and `/robots.txt` for search engines.
+- **Analytics**: Admin → Analytics shows page views, product views, offers submitted, and trade-in
+  submissions over the last 30 days, plus your most-viewed devices — no third-party account or cookie
+  banner needed, since it's just a table in your own Supabase project.
+- **Orders**: accepting an offer now automatically creates a "sale" order and takes one unit off that
+  product's stock (hiding it once it hits zero). Accepting a trade-in creates a "purchase" order. Admin →
+  Orders lets you move each through New → Paid → Completed (or Cancelled) as it happens for real.
+
 ## Stack
 
 - **App**: Node + Express (same code runs locally and on Vercel)

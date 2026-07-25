@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sell or trade your device — TheTechMart</title>
+<meta name="description" content="Sell your phone for cash or trade it in at TheTechMart. Submit your device for a fast, fair quote over WhatsApp.">
+<meta property="og:title" content="Sell or trade your device — TheTechMart">
+<meta property="og:description" content="Sell your phone for cash or trade it in at TheTechMart. Submit your device for a fast, fair quote over WhatsApp.">
+<meta property="og:image" content="/img/logo.png">
 <link rel="icon" type="image/png" href="/img/favicon.png">
 <link rel="stylesheet" href="/css/style.css">
 </head>
@@ -107,6 +111,7 @@
 
 <script src="/js/common.js"></script>
 <script>
+api('/api/track', { method: 'POST', body: { type: 'page_view', path: '/sell' } }).catch(() => {});
 let currentType = 'sell';
 document.querySelectorAll('.type-toggle button').forEach(btn => {
   btn.addEventListener('click', () => {

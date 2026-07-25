@@ -130,6 +130,8 @@ document.getElementById('offer-form').addEventListener('submit', async (e) => {
 });
 
 load();
+api('/api/track', { method: 'POST', body: { type: 'page_view', path: '/product' } }).catch(() => {});
+if (id) api('/api/track', { method: 'POST', body: { type: 'product_view', productId: id } }).catch(() => {});
 </script>
 </body>
 </html>

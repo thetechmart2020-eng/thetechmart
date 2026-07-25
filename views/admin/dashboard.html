@@ -16,6 +16,8 @@
     <button class="admin-tab" data-tab="products">Stock <span class="count" id="c-products"></span></button>
     <button class="admin-tab" data-tab="offers">Offers <span class="count" id="c-offers"></span></button>
     <button class="admin-tab" data-tab="tradeins">Trade-ins <span class="count" id="c-tradeins"></span></button>
+    <button class="admin-tab" data-tab="orders">Orders <span class="count" id="c-orders"></span></button>
+    <button class="admin-tab" data-tab="analytics">Analytics</button>
     <button class="admin-tab" data-tab="settings">Settings</button>
     <div style="flex:1"></div>
     <button class="admin-tab" onclick="logout()">Sign out</button>
@@ -68,6 +70,30 @@
       </table>
     </section>
 
+    <section class="admin-panel" id="panel-orders">
+      <div class="admin-head"><h2>Orders</h2></div>
+      <p class="helper" style="margin-bottom:16px;">Created automatically when you accept an offer (sale) or a trade-in (purchase). Move each through its pipeline as it happens in real life.</p>
+      <table class="table" id="orders-table">
+        <thead><tr><th>Type</th><th>Customer</th><th>Amount</th><th>Notes</th><th>Status</th><th>Date</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="admin-panel" id="panel-analytics">
+      <div class="admin-head"><h2>Analytics <span class="helper">(last 30 days)</span></h2></div>
+      <div class="stat-cards">
+        <div class="stat-card"><div class="num" id="an-pageviews">0</div><div class="lbl">Page views</div></div>
+        <div class="stat-card"><div class="num" id="an-productviews">0</div><div class="lbl">Product views</div></div>
+        <div class="stat-card"><div class="num" id="an-offers">0</div><div class="lbl">Offers submitted</div></div>
+        <div class="stat-card"><div class="num" id="an-tradeins">0</div><div class="lbl">Sell/trade submissions</div></div>
+      </div>
+      <h3 style="font-size:15px;margin-bottom:12px;">Most-viewed devices</h3>
+      <table class="table" id="top-products-table">
+        <thead><tr><th>Device</th><th>Views</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
     <section class="admin-panel" id="panel-settings">
       <div class="admin-head"><h2>Settings</h2></div>
       <div class="form-card" style="max-width:460px;">
@@ -105,7 +131,7 @@
 
 <script src="/js/common.js"></script>
 <script>
-let PRODUCTS = [], OFFERS = [], TRADEINS = [];
+let PRODUCTS = [], OFFERS = [], TRADEINS = [], ORDERS = [];
 let imgTargetId = null;
 
 async function checkAuth() {
@@ -119,6 +145,7 @@ document.querySelectorAll('.admin-tab[data-tab]').forEach(btn => {
     document.querySelectorAll('.admin-panel').forEach(p => p.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'analytics') loadAnalytics().catch(() => toast('Analytics not set up yet — run the migration SQL in Supabase'));
   });
 });
 
@@ -131,7 +158,8 @@ async function loadAll() {
   [PRODUCTS, OFFERS, TRADEINS] = await Promise.all([
     api('/api/admin/products'), api('/api/admin/offers'), api('/api/admin/tradeins')
   ]);
-  renderProducts(); renderOffers(); renderTradeins(); renderCounts();
+  ORDERS = await api('/api/admin/orders').catch(() => []);
+  renderProducts(); renderOffers(); renderTradeins(); renderOrders(); renderCounts();
 }
 
 function renderCounts() {
@@ -140,6 +168,7 @@ function renderCounts() {
   const pendingTrades = TRADEINS.filter(t => t.status === 'pending').length;
   document.getElementById('c-offers').textContent = pendingOffers;
   document.getElementById('c-tradeins').textContent = pendingTrades;
+  document.getElementById('c-orders').textContent = ORDERS.filter(o => o.status !== 'completed' && o.status !== 'cancelled').length;
   document.getElementById('ov-products').textContent = PRODUCTS.length;
   document.getElementById('ov-offers').textContent = pendingOffers;
   document.getElementById('ov-tradeins').textContent = pendingTrades;
@@ -198,6 +227,40 @@ function renderTradeins() {
       </td>
     </tr>
   `).join('') || `<tr><td colspan="7" class="helper">No sell/trade-in submissions yet.</td></tr>`;
+}
+
+const ORDER_STATUSES = ['new', 'paid', 'completed', 'cancelled'];
+function renderOrders() {
+  document.querySelector('#orders-table tbody').innerHTML = ORDERS.map(o => `
+    <tr>
+      <td><span class="status-pill ${o.type === 'sale' ? 'accepted' : 'pending'}">${o.type}</span></td>
+      <td>${o.customerName}<br><span class="helper">${o.customerPhone}</span></td>
+      <td class="mono">${fmtPrice(o.amount)}</td>
+      <td><span class="helper">${o.notes || '—'}</span></td>
+      <td>
+        <select onchange="updateOrderStatus('${o.id}', this.value)" style="background:var(--surface-2);border:1px solid var(--line);color:var(--text);border-radius:6px;padding:4px 8px;font-size:12.5px;">
+          ${ORDER_STATUSES.map(s => `<option value="${s}" ${s === o.status ? 'selected' : ''}>${s}</option>`).join('')}
+        </select>
+      </td>
+      <td class="helper">${new Date(o.createdAt).toLocaleDateString()}</td>
+    </tr>
+  `).join('') || `<tr><td colspan="6" class="helper">No orders yet — these appear automatically when you accept an offer or trade-in.</td></tr>`;
+}
+async function updateOrderStatus(id, status) {
+  await api(`/api/admin/orders/${id}`, { method: 'PUT', body: { status } });
+  toast('Order updated');
+  loadAll();
+}
+
+async function loadAnalytics() {
+  const a = await api('/api/admin/analytics');
+  document.getElementById('an-pageviews').textContent = a.pageViews;
+  document.getElementById('an-productviews').textContent = a.productViews;
+  document.getElementById('an-offers').textContent = a.offersSubmitted;
+  document.getElementById('an-tradeins').textContent = a.tradeinsSubmitted;
+  document.querySelector('#top-products-table tbody').innerHTML = a.topProducts.map(p => `
+    <tr><td>${p.brand} ${p.model}</td><td class="mono">${p.views}</td></tr>
+  `).join('') || `<tr><td colspan="2" class="helper">No product views yet.</td></tr>`;
 }
 
 async function uploadCsv() {
