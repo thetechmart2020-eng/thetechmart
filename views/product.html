@@ -66,8 +66,8 @@
       <a href="https://wa.me/27716623565" target="_blank" rel="noopener">WhatsApp</a>
       <a href="mailto:thetechmart2020@gmail.com">Email</a>
       <a href="https://instagram.com/the_tech_mart" target="_blank" rel="noopener">Instagram</a>
-      <a href="https://facebook.com/TheTechMart" target="_blank" rel="noopener">Facebook</a>
-      <a href="https://x.com/The_Tech_Mart" target="_blank" rel="noopener">X</a>
+      <a href="https://web.facebook.com/thulani.molefi/?_rdc=1&_rdr#" target="_blank" rel="noopener">Facebook</a>
+      <a href="https://x.com/TheTechMart3" target="_blank" rel="noopener">X</a>
     </div>
   </div>
 </footer>
@@ -88,6 +88,7 @@ async function load() {
     <div class="pd-img">${productImage(product)}</div>
     <div>
       <span class="pd-tag">${product.condition}</span>
+      <span class="pd-tag" style="margin-left:8px;color:var(--text-dim);border-color:var(--line);">${product.category || 'Phones'}</span>
       <h1 class="pd-title">${product.brand} ${product.model}</h1>
       <div class="pd-sub">${product.storage || ''}${product.storage && product.color ? ' · ' : ''}${product.color || ''}</div>
       <div class="pd-price mono">${fmtPrice(product.price)}</div>
@@ -95,6 +96,7 @@ async function load() {
       <div class="specs">
         <div class="spec-row"><span class="k">Brand</span><span>${product.brand}</span></div>
         <div class="spec-row"><span class="k">Model</span><span>${product.model}</span></div>
+        <div class="spec-row"><span class="k">Category</span><span>${product.category || 'Phones'}</span></div>
         ${product.storage ? `<div class="spec-row"><span class="k">Storage</span><span>${product.storage}</span></div>` : ''}
         ${product.color ? `<div class="spec-row"><span class="k">Color</span><span>${product.color}</span></div>` : ''}
         <div class="spec-row"><span class="k">Condition</span><span>${product.condition}</span></div>

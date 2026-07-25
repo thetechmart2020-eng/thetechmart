@@ -69,6 +69,7 @@
     </div>
     <div class="filters">
       <input type="text" id="f-search" placeholder="Search brand or model…">
+      <select id="f-category"><option value="">All categories</option></select>
       <select id="f-brand"><option value="">All brands</option></select>
       <select id="f-condition"><option value="">Any condition</option></select>
       <select id="f-sort">
@@ -88,8 +89,8 @@
       <a href="https://wa.me/27716623565" target="_blank" rel="noopener">WhatsApp</a>
       <a href="mailto:thetechmart2020@gmail.com">Email</a>
       <a href="https://instagram.com/the_tech_mart" target="_blank" rel="noopener">Instagram</a>
-      <a href="https://facebook.com/TheTechMart" target="_blank" rel="noopener">Facebook</a>
-      <a href="https://x.com/The_Tech_Mart" target="_blank" rel="noopener">X</a>
+      <a href="https://web.facebook.com/thulani.molefi/?_rdc=1&_rdr#" target="_blank" rel="noopener">Facebook</a>
+      <a href="https://x.com/TheTechMart3" target="_blank" rel="noopener">X</a>
     </div>
   </div>
 </footer>
@@ -115,6 +116,7 @@ function render(list) {
       <div class="card-img">${productImage(p)}</div>
       <div class="card-body">
         <span class="card-tag">${p.condition}</span>
+        <span class="card-tag" style="margin-left:6px;color:var(--text-dim);border-color:var(--line);">${p.category || 'Phones'}</span>
         <div class="card-title">${p.brand} ${p.model}</div>
         <div class="card-sub">${p.storage || ''}${p.storage && p.color ? ' · ' : ''}${p.color || ''}</div>
         <div class="card-price">${fmtPrice(p.price)} <small>list</small></div>
@@ -125,10 +127,11 @@ function render(list) {
 
 function applyFilters() {
   const q = document.getElementById('f-search').value.trim();
+  const category = document.getElementById('f-category').value;
   const brand = document.getElementById('f-brand').value;
   const condition = document.getElementById('f-condition').value;
   const sort = document.getElementById('f-sort').value;
-  const params = new URLSearchParams({ q, brand, condition, sort });
+  const params = new URLSearchParams({ q, category, brand, condition, sort });
   api('/api/products?' + params.toString()).then(render).catch(() => render([]));
 }
 
@@ -136,13 +139,15 @@ async function load() {
   ALL = await api('/api/products?sort=newest').catch(() => []);
   render(ALL);
   tick();
+  const categories = [...new Set(ALL.map(p => p.category || 'Phones'))];
+  document.getElementById('f-category').innerHTML += categories.map(c => `<option>${c}</option>`).join('');
   const brands = [...new Set(ALL.map(p => p.brand))];
   document.getElementById('f-brand').innerHTML += brands.map(b => `<option>${b}</option>`).join('');
   const conditions = [...new Set(ALL.map(p => p.condition))];
   document.getElementById('f-condition').innerHTML += conditions.map(c => `<option>${c}</option>`).join('');
 }
 
-['f-search','f-brand','f-condition','f-sort'].forEach(id => {
+['f-search','f-category','f-brand','f-condition','f-sort'].forEach(id => {
   document.getElementById(id).addEventListener('input', applyFilters);
   document.getElementById(id).addEventListener('change', applyFilters);
 });

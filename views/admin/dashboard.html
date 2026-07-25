@@ -44,12 +44,12 @@
       </div>
       <div class="upload-box">
         <div><b>Upload your price list (CSV)</b></div>
-        <div class="helper">Columns: brand, model, price, condition, storage, color, stock, imageUrl (optional). Re-uploading updates matching rows instead of duplicating them.</div>
+        <div class="helper">Columns: brand, model, price, category, condition, storage, color, stock, imageUrl (optional). Category can be Phones, Accessories, Tablets, Audio, or anything else you want — leave blank and it defaults to Phones. Re-uploading updates matching rows instead of duplicating them.</div>
         <input type="file" id="csv-file" accept=".csv">
         <div style="margin-top:12px;"><button class="btn btn-primary btn-sm" onclick="uploadCsv()">Upload &amp; sync stock</button></div>
       </div>
       <table class="table" id="products-table">
-        <thead><tr><th></th><th>Device</th><th>Condition</th><th>Price</th><th>Stock</th><th>Status</th><th></th></tr></thead>
+        <thead><tr><th></th><th>Device</th><th>Category</th><th>Condition</th><th>Price</th><th>Stock</th><th>Status</th><th></th></tr></thead>
         <tbody></tbody>
       </table>
     </section>
@@ -179,6 +179,7 @@ function renderProducts() {
     <tr>
       <td>${p.imageUrl ? `<img class="thumb-sm" src="${p.imageUrl}">` : `<div class="thumb-sm"></div>`}</td>
       <td><b>${p.brand} ${p.model}</b><br><span class="helper">${p.storage || ''} ${p.color || ''}</span></td>
+      <td>${p.category || 'Phones'}</td>
       <td>${p.condition}</td>
       <td class="mono">${fmtPrice(p.price)}</td>
       <td>${p.stock}</td>
@@ -189,7 +190,7 @@ function renderProducts() {
         <button class="btn btn-danger btn-sm" onclick="deleteProduct('${p.id}')">Delete</button>
       </td>
     </tr>
-  `).join('') || `<tr><td colspan="7" class="helper">No stock yet — upload a CSV above to get started.</td></tr>`;
+  `).join('') || `<tr><td colspan="8" class="helper">No stock yet — upload a CSV above to get started.</td></tr>`;
 }
 
 function renderOffers() {

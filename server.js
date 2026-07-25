@@ -49,13 +49,14 @@ app.get('/api/config', asyncRoute(async (req, res) => {
 
 app.get('/api/products', asyncRoute(async (req, res) => {
   let list = await db.listProducts({ activeOnly: true });
-  const { q, brand, condition, minPrice, maxPrice, sort } = req.query;
+  const { q, brand, condition, category, minPrice, maxPrice, sort } = req.query;
   if (q) {
     const s = q.toLowerCase();
     list = list.filter(p => (p.model + ' ' + p.brand).toLowerCase().includes(s));
   }
   if (brand) list = list.filter(p => p.brand.toLowerCase() === brand.toLowerCase());
   if (condition) list = list.filter(p => p.condition.toLowerCase() === condition.toLowerCase());
+  if (category) list = list.filter(p => (p.category || 'Phones').toLowerCase() === category.toLowerCase());
   if (minPrice) list = list.filter(p => p.price >= Number(minPrice));
   if (maxPrice) list = list.filter(p => p.price <= Number(maxPrice));
   if (sort === 'price_asc') list = [...list].sort((a, b) => a.price - b.price);
@@ -163,6 +164,7 @@ app.post('/api/admin/upload-csv', requireAdmin, csvUpload.single('file'), asyncR
     if (Number.isNaN(price)) continue;
     rows.push({
       brand: row.brand.trim(), model: row.model.trim(), price,
+      category: row.category ? row.category.trim() : 'Phones',
       condition: row.condition ? row.condition.trim() : 'New',
       storage: row.storage ? row.storage.trim() : '',
       color: row.color ? row.color.trim() : '',
@@ -173,6 +175,62 @@ app.post('/api/admin/upload-csv', requireAdmin, csvUpload.single('file'), asyncR
 
   const { added, updated } = await db.syncProductsFromRows(rows);
   res.json({ ok: true, added, updated, total: records.length });
+}));
+
+// Runs Icecat lookups server-side (on Vercel's real Node runtime, which has normal
+// outbound networking — unlike browser-sandboxed dev environments such as
+// StackBlitz's WebContainers, which can't complete this kind of request).
+// Upload a price-list CSV, get back the same CSV with imageUrl filled in wherever
+// Icecat found a match. Requires ICECAT_USERNAME / ICECAT_PASSWORD env vars.
+app.post('/api/admin/enrich-images', requireAdmin, csvUpload.single('file'), asyncRoute(async (req, res) => {
+  const { ICECAT_USERNAME, ICECAT_PASSWORD } = process.env;
+  if (!ICECAT_USERNAME || !ICECAT_PASSWORD) {
+    return res.status(400).json({ error: 'ICECAT_USERNAME / ICECAT_PASSWORD are not set in this deployment\'s environment variables.' });
+  }
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+  let rows;
+  try {
+    rows = parse(req.file.buffer.toString('utf-8'), { columns: true, skip_empty_lines: true, trim: true });
+  } catch (e) {
+    return res.status(400).json({ error: 'Could not parse CSV: ' + e.message });
+  }
+
+  const auth = Buffer.from(`${ICECAT_USERNAME}:${ICECAT_PASSWORD}`).toString('base64');
+  const results = [];
+  let matched = 0;
+
+  for (const row of rows) {
+    if (row.imageUrl && row.imageUrl.trim()) continue; // don't overwrite existing photos
+    const url = `https://data.icecat.biz/xml_s3/xml_server3.cgi?lang=en&shopname=openIcecat-live&brand=${encodeURIComponent(row.brand)}&prod=${encodeURIComponent(row.model)}`;
+    try {
+      const icecatRes = await fetch(url, { headers: { Authorization: `Basic ${auth}` } });
+      const text = await icecatRes.text();
+      const highPicMatch = text.match(/HighPic="([^"]+)"/);
+      const picMatch = text.match(/<Pic[^>]*>([^<]+)<\/Pic>/) || text.match(/Pic="([^"]+)"/);
+      const imageUrl = (highPicMatch && highPicMatch[1]) || (picMatch && picMatch[1]) || null;
+      if (icecatRes.ok && imageUrl) {
+        row.imageUrl = imageUrl;
+        matched++;
+        results.push({ brand: row.brand, model: row.model, matched: true });
+      } else {
+        results.push({ brand: row.brand, model: row.model, matched: false, status: icecatRes.status });
+      }
+    } catch (err) {
+      results.push({ brand: row.brand, model: row.model, matched: false, error: err.message });
+    }
+  }
+
+  const headers = Object.keys(rows[0] || {});
+  const escape = (v) => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+  const csv = [headers.join(','), ...rows.map((r) => headers.map((h) => escape(r[h])).join(','))].join('\n') + '\n';
+
+  res.set('Content-Type', 'text/csv');
+  res.set('Content-Disposition', 'attachment; filename="enriched.csv"');
+  res.set('X-Enrich-Matched', String(matched));
+  res.set('X-Enrich-Total', String(rows.length));
+  res.set('X-Enrich-Details', encodeURIComponent(JSON.stringify(results.slice(0, 10))));
+  res.send(csv);
 }));
 
 app.put('/api/admin/products/:id', requireAdmin, asyncRoute(async (req, res) => {

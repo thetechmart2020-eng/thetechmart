@@ -10,7 +10,7 @@ function check(error) {
 
 // ---------- mappers ----------
 const productOut = (r) => ({
-  id: r.id, brand: r.brand, model: r.model, price: Number(r.price), condition: r.condition,
+  id: r.id, brand: r.brand, model: r.model, category: r.category || 'Phones', price: Number(r.price), condition: r.condition,
   storage: r.storage, color: r.color, stock: r.stock, imageUrl: r.image_url,
   active: r.active, createdAt: r.created_at
 });
@@ -62,7 +62,7 @@ async function getProduct(id) {
 }
 async function insertProduct(p) {
   const row = {
-    brand: p.brand, model: p.model, price: p.price, condition: p.condition,
+    brand: p.brand, model: p.model, category: p.category || 'Phones', price: p.price, condition: p.condition,
     storage: p.storage, color: p.color, stock: p.stock, image_url: p.imageUrl || null, active: true
   };
   const { data, error } = await supabase.from('products').insert(row).select().single();
@@ -73,6 +73,7 @@ async function updateProduct(id, patch) {
   const row = {};
   if (patch.brand !== undefined) row.brand = patch.brand;
   if (patch.model !== undefined) row.model = patch.model;
+  if (patch.category !== undefined) row.category = patch.category;
   if (patch.price !== undefined) row.price = patch.price;
   if (patch.condition !== undefined) row.condition = patch.condition;
   if (patch.storage !== undefined) row.storage = patch.storage;
@@ -180,7 +181,7 @@ async function acceptTradein(id) {
 // matching rows instead of creating duplicates.
 async function syncProductsFromRows(rows) {
   const existing = await listProducts();
-  const keyOf = (r) => `${r.brand}|${r.model}|${r.storage || ''}|${r.condition || ''}`.toLowerCase();
+  const keyOf = (r) => `${r.brand}|${r.model}|${r.storage || ''}|${r.condition || ''}|${r.category || 'Phones'}`.toLowerCase();
   const existingByKey = new Map(existing.map((p) => [keyOf(p), p]));
 
   const toInsert = [];
@@ -193,7 +194,7 @@ async function syncProductsFromRows(rows) {
       updates.push(updateProduct(match.id, row));
     } else {
       toInsert.push({
-        brand: row.brand, model: row.model, price: row.price, condition: row.condition,
+        brand: row.brand, model: row.model, category: row.category || 'Phones', price: row.price, condition: row.condition,
         storage: row.storage, color: row.color, stock: row.stock, image_url: row.imageUrl || null, active: true
       });
     }

@@ -7,6 +7,7 @@ create table if not exists products (
   id uuid primary key default gen_random_uuid(),
   brand text not null,
   model text not null,
+  category text default 'Phones', -- 'Phones' | 'Accessories' | 'Tablets' | 'Audio' | 'Other'
   price numeric not null,
   condition text default 'New',
   storage text default '',

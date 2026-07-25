@@ -32,6 +32,25 @@ I guessed at the exact Facebook/X/Instagram page URLs from the handles you gave 
 resolve to your real pages and adjust the `href`s in the footer of `views/index.html`, `views/product.html`,
 and `views/sell.html` if any are off.
 
+## What's new: categories (Samsung, accessories, and beyond)
+
+**If your site is already live**, run one more migration first — Supabase → SQL Editor → New query:
+
+```sql
+alter table products add column if not exists category text default 'Phones';
+update products set category = 'Phones' where category is null;
+```
+
+(Fresh installs don't need this — `schema.sql` already includes it.)
+
+Products now have a `category` field (Phones, Accessories, Tablets, Audio, or anything else you want) —
+so a phone case or charger doesn't have to awkwardly pretend to have "storage." The storefront now has a
+category filter dropdown alongside brand and condition. A sample CSV with Samsung phones, tablets, earbuds,
+and accessories is included: `sample-price-list-v2.csv`.
+
+CSV columns are now: `brand,model,price,category,condition,storage,color,stock,imageUrl` — category is
+optional and defaults to "Phones" if you leave it blank, so your existing CSVs still work unchanged.
+
 ## What's new: search/SEO, analytics, order tracking
 
 **If your site is already live**, run one more migration before these work — open Supabase → SQL Editor →
@@ -101,6 +120,30 @@ Push the repo to GitHub, then open `https://stackblitz.com/github/YOUR-USERNAME/
 in-browser dev environment — handy for quick edits (copy, prices, colors) without installing Node locally.
 Add the same three environment variables under StackBlitz's project settings (or a `.env` file in the
 StackBlitz workspace) so it can reach your Supabase project.
+
+## Sourcing product images (Icecat)
+
+`scripts/enrich-images.js` looks up each row of a price-list CSV against Icecat's Open Catalog and
+fills in the `imageUrl` column automatically, instead of you finding/uploading a photo per SKU.
+
+**This is a one-off local tool, not part of the live site** — you run it on your computer against a CSV
+before uploading via Admin → Stock, same as any other CSV.
+
+Setup:
+1. Register for a free account at icecat.biz (their "Open Icecat" / data-recipient signup).
+2. `npm install` (if you haven't already)
+3. Test on a handful of rows first — don't run the whole catalogue blind:
+   ```bash
+   ICECAT_USERNAME=you ICECAT_PASSWORD=yourpassword node scripts/enrich-images.js thetechmart-full-pricelist.csv --test 5
+   ```
+4. Check the console output and `scripts/icecat-raw-sample.json` it creates — this shows exactly what
+   Icecat returned for a few products. Icecat matches on exact product codes/barcodes more reliably than
+   plain names like "Galaxy S23," so some rows may come back empty or mismatched at first. If that
+   happens, share the sample JSON and we'll tune the matching together — this is genuinely a first pass,
+   not a guaranteed-working integration, since I can't test it against a live Icecat account myself.
+5. Once you're happy with the match quality, run it on the full file (drop `--test 5`) — it writes a new
+   file, `*.enriched.csv`, leaving your original untouched, and skips any row that already has an
+   `imageUrl` so it won't overwrite photos you've already added.
 
 ## Uploading your price list
 
