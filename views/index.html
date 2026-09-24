@@ -243,8 +243,10 @@ async function load() {
   ALL = await api('/api/products?sort=newest').catch(() => []);
   render(ALL);
   tick();
-  const categories = [...new Set(ALL.map(p => p.category || 'Phones'))];
-  document.getElementById('f-category').innerHTML += categories.map(c => `<option>${c}</option>`).join('');
+  // Always show the full set of categories (matching Shop by category above),
+  // not just whichever ones happen to have stock right now — otherwise the
+  // dropdown shrinks to one option until every category has something listed.
+  document.getElementById('f-category').innerHTML += CATS.map(c => `<option>${c.name}</option>`).join('');
   const brands = [...new Set(ALL.map(p => p.brand))];
   document.getElementById('f-brand').innerHTML += brands.map(b => `<option>${b}</option>`).join('');
   const conditions = [...new Set(ALL.map(p => p.condition))];
