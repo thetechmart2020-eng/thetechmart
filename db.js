@@ -11,23 +11,34 @@ function check(error) {
 // ---------- mappers ----------
 const productOut = (r) => ({
   id: r.id, brand: r.brand, model: r.model, category: r.category || 'Phones', price: Number(r.price), condition: r.condition,
-  storage: r.storage, color: r.color, stock: r.stock, imageUrl: r.image_url,
-  active: r.active, createdAt: r.created_at
+  storage: r.storage, color: r.color, stock: r.stock, imageUrl: r.image_url, images: r.images || [],
+  active: r.active, sold: (r.stock || 0) < 1, createdAt: r.created_at
 });
 const offerOut = (r) => ({
   id: r.id, productId: r.product_id, productName: r.product_name, listPrice: Number(r.list_price),
-  amount: Number(r.amount), name: r.name, phone: r.phone, message: r.message,
-  status: r.status, createdAt: r.created_at
+  amount: Number(r.amount), name: r.name, phone: r.phone, email: r.email || '', message: r.message,
+  status: r.status, quoteNumber: r.quote_number || '', quoteUrl: r.quote_url || '', createdAt: r.created_at
 });
 const tradeinOut = (r) => ({
   id: r.id, type: r.type, brand: r.brand, model: r.model, storage: r.storage, condition: r.condition,
   askingPrice: r.asking_price === null ? null : Number(r.asking_price), name: r.name, phone: r.phone,
   notes: r.notes, photos: r.photos || [], status: r.status, createdAt: r.created_at
 });
-const configOut = (r) => ({ storeName: r.store_name, whatsappNumber: r.whatsapp_number, adminPassword: r.admin_password });
+const configOut = (r) => ({
+  storeName: r.store_name, whatsappNumber: r.whatsapp_number, adminPassword: r.admin_password,
+  contactEmail: r.contact_email || 'thetechmart2020@gmail.com',
+  paymentSettings: r.payment_settings || { yoco: { enabled: false }, payjustnow: { enabled: false }, happypay: { enabled: false } }
+});
 const orderOut = (r) => ({
   id: r.id, type: r.type, source: r.source, sourceId: r.source_id, productId: r.product_id,
-  customerName: r.customer_name, customerPhone: r.customer_phone, amount: Number(r.amount),
+  customerName: r.customer_name, customerPhone: r.customer_phone, customerEmail: r.customer_email || '',
+  deliveryAddress: r.delivery_address || {}, fulfillmentMethod: r.fulfillment_method || 'delivery',
+  courier: r.courier || 'Courier Guy', trackingNumber: r.tracking_number || '',
+  paymentMethod: r.payment_method || 'manual', paymentStatus: r.payment_status || 'pending',
+  paymentRef: r.payment_ref || '', checkoutChannel: r.checkout_channel || 'whatsapp',
+  quoteNumber: r.quote_number || '', quoteUrl: r.quote_url || '',
+  invoiceNumber: r.invoice_number || '', invoiceUrl: r.invoice_url || '',
+  amount: Number(r.amount),
   status: r.status, notes: r.notes, createdAt: r.created_at, updatedAt: r.updated_at
 });
 
@@ -42,6 +53,8 @@ async function updateConfig(patch) {
   if (patch.storeName !== undefined) row.store_name = patch.storeName;
   if (patch.whatsappNumber !== undefined) row.whatsapp_number = patch.whatsappNumber;
   if (patch.adminPassword !== undefined) row.admin_password = patch.adminPassword;
+  if (patch.contactEmail !== undefined) row.contact_email = patch.contactEmail;
+  if (patch.paymentSettings !== undefined) row.payment_settings = patch.paymentSettings;
   const { data, error } = await supabase.from('config').update(row).eq('id', 1).select().single();
   check(error);
   return configOut(data);
@@ -63,7 +76,8 @@ async function getProduct(id) {
 async function insertProduct(p) {
   const row = {
     brand: p.brand, model: p.model, category: p.category || 'Phones', price: p.price, condition: p.condition,
-    storage: p.storage, color: p.color, stock: p.stock, image_url: p.imageUrl || null, active: true
+    storage: p.storage, color: p.color, stock: p.stock, image_url: p.imageUrl || null,
+    images: p.images || (p.imageUrl ? [p.imageUrl] : []), active: true
   };
   const { data, error } = await supabase.from('products').insert(row).select().single();
   check(error);
@@ -80,6 +94,7 @@ async function updateProduct(id, patch) {
   if (patch.color !== undefined) row.color = patch.color;
   if (patch.stock !== undefined) row.stock = patch.stock;
   if (patch.imageUrl !== undefined) row.image_url = patch.imageUrl;
+  if (patch.images !== undefined) row.images = patch.images;
   if (patch.active !== undefined) row.active = patch.active;
   const { data, error } = await supabase.from('products').update(row).eq('id', id).select().maybeSingle();
   check(error);
@@ -94,11 +109,16 @@ async function deleteProduct(id) {
 async function addOffer(o) {
   const row = {
     product_id: o.productId, product_name: o.productName, list_price: o.listPrice,
-    amount: o.amount, name: o.name, phone: o.phone, message: o.message || '', status: 'pending'
+    amount: o.amount, name: o.name, phone: o.phone, email: o.email || '', message: o.message || '', status: 'pending'
   };
   const { data, error } = await supabase.from('offers').insert(row).select().single();
   check(error);
   return offerOut(data);
+}
+async function getOffer(id) {
+  const { data, error } = await supabase.from('offers').select('*').eq('id', id).maybeSingle();
+  check(error);
+  return data ? offerOut(data) : null;
 }
 async function listOffers() {
   const { data, error } = await supabase.from('offers').select('*').order('created_at', { ascending: false });
@@ -107,6 +127,14 @@ async function listOffers() {
 }
 async function updateOfferStatus(id, status) {
   const { data, error } = await supabase.from('offers').update({ status }).eq('id', id).select().maybeSingle();
+  check(error);
+  return data ? offerOut(data) : null;
+}
+async function updateOfferDocs(id, { quoteNumber, quoteUrl }) {
+  const row = {};
+  if (quoteNumber !== undefined) row.quote_number = quoteNumber;
+  if (quoteUrl !== undefined) row.quote_url = quoteUrl;
+  const { data, error } = await supabase.from('offers').update(row).eq('id', id).select().maybeSingle();
   check(error);
   return data ? offerOut(data) : null;
 }
@@ -122,8 +150,11 @@ async function acceptOffer(id) {
   if (offer.productId) {
     const product = await getProduct(offer.productId);
     if (product) {
+      // Stock hitting zero now shows as a "Sold" badge on the storefront instead
+      // of hiding the listing — recently-sold devices are good social proof.
+      // `active` stays reserved for the admin's own manual show/hide toggle.
       const nextStock = Math.max(0, (product.stock || 0) - 1);
-      await updateProduct(product.id, { stock: nextStock, active: nextStock > 0 });
+      await updateProduct(product.id, { stock: nextStock });
     }
   }
 
@@ -213,12 +244,20 @@ async function syncProductsFromRows(rows) {
 async function addOrder(o) {
   const row = {
     type: o.type, source: o.source, source_id: o.sourceId || null, product_id: o.productId || null,
-    customer_name: o.customerName, customer_phone: o.customerPhone, amount: o.amount || 0,
-    status: 'new', notes: o.notes || ''
+    customer_name: o.customerName, customer_phone: o.customerPhone, customer_email: o.customerEmail || '',
+    delivery_address: o.deliveryAddress || {}, fulfillment_method: o.fulfillmentMethod || 'delivery',
+    courier: o.courier || 'Courier Guy', payment_method: o.paymentMethod || 'manual',
+    payment_status: o.paymentStatus || 'pending', checkout_channel: o.checkoutChannel || 'whatsapp',
+    amount: o.amount || 0, status: 'new', notes: o.notes || ''
   };
   const { data, error } = await supabase.from('orders').insert(row).select().single();
   check(error);
   return orderOut(data);
+}
+async function getOrder(id) {
+  const { data, error } = await supabase.from('orders').select('*').eq('id', id).maybeSingle();
+  check(error);
+  return data ? orderOut(data) : null;
 }
 async function listOrders() {
   const { data, error } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
@@ -230,6 +269,13 @@ async function updateOrder(id, patch) {
   if (patch.status !== undefined) row.status = patch.status;
   if (patch.notes !== undefined) row.notes = patch.notes;
   if (patch.amount !== undefined) row.amount = patch.amount;
+  if (patch.trackingNumber !== undefined) row.tracking_number = patch.trackingNumber;
+  if (patch.paymentStatus !== undefined) row.payment_status = patch.paymentStatus;
+  if (patch.paymentRef !== undefined) row.payment_ref = patch.paymentRef;
+  if (patch.quoteNumber !== undefined) row.quote_number = patch.quoteNumber;
+  if (patch.quoteUrl !== undefined) row.quote_url = patch.quoteUrl;
+  if (patch.invoiceNumber !== undefined) row.invoice_number = patch.invoiceNumber;
+  if (patch.invoiceUrl !== undefined) row.invoice_url = patch.invoiceUrl;
   const { data, error } = await supabase.from('orders').update(row).eq('id', id).select().maybeSingle();
   check(error);
   return data ? orderOut(data) : null;
@@ -277,8 +323,8 @@ async function getAnalyticsSummary() {
 module.exports = {
   getConfig, updateConfig,
   listProducts, getProduct, insertProduct, updateProduct, deleteProduct, syncProductsFromRows,
-  addOffer, listOffers, updateOfferStatus, acceptOffer,
+  addOffer, getOffer, listOffers, updateOfferStatus, updateOfferDocs, acceptOffer,
   addTradein, listTradeins, updateTradeinStatus, acceptTradein,
-  addOrder, listOrders, updateOrder,
+  addOrder, getOrder, listOrders, updateOrder,
   logEvent, getAnalyticsSummary
 };

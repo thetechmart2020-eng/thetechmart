@@ -49,11 +49,18 @@
           </div>
         </div>
         <div class="field">
+          <label>Email (optional — so we can send you a quote)</label>
+          <input type="email" name="email" placeholder="you@example.com">
+        </div>
+        <div class="field">
           <label>Note (optional)</label>
           <textarea name="message" placeholder="Anything we should know?"></textarea>
         </div>
-        <button type="submit" class="btn btn-primary btn-block">Send offer via WhatsApp</button>
-        <p class="helper">We'll save your offer and open WhatsApp with it pre-filled — just hit send from there. We reply directly to accept, reject, or counter.</p>
+        <div class="checkout-actions">
+          <button type="submit" data-channel="whatsapp" class="btn btn-primary btn-block">Send offer via WhatsApp</button>
+          <button type="submit" data-channel="email" class="btn btn-ghost btn-block" style="margin-top:10px;">Send offer via Email</button>
+        </div>
+        <p class="helper">We'll save your offer and open WhatsApp or your email app with it pre-filled — just hit send from there. We reply directly to accept, reject, or counter.</p>
       </form>
     </div>
   </div>
@@ -84,15 +91,21 @@ async function load() {
     document.getElementById('content').innerHTML = `<div class="empty" style="grid-column:1/-1">Couldn't find that device. <a href="/" style="color:var(--accent)">Back to shop</a></div>`;
     return;
   }
+  const gallery = (product.images && product.images.length) ? product.images : (product.imageUrl ? [product.imageUrl] : []);
+  const sold = product.sold || product.stock < 1;
+
   document.getElementById('content').innerHTML = `
-    <div class="pd-img">${productImage(product)}</div>
+    <div>
+      <div class="pd-img" id="pd-main-img">${gallery.length ? `<img src="${gallery[0]}" alt="${product.brand} ${product.model}">` : deviceArt(product.brand, product.model)}${sold ? '<span class="sold-badge">SOLD</span>' : ''}</div>
+      ${gallery.length > 1 ? `<div class="pd-thumbs">${gallery.map((src, i) => `<img src="${src}" data-i="${i}" class="${i === 0 ? 'active' : ''}">`).join('')}</div>` : ''}
+    </div>
     <div>
       <span class="pd-tag">${product.condition}</span>
       <span class="pd-tag" style="margin-left:8px;color:var(--text-dim);border-color:var(--line);">${product.category || 'Phones'}</span>
       <h1 class="pd-title">${product.brand} ${product.model}</h1>
       <div class="pd-sub">${product.storage || ''}${product.storage && product.color ? ' · ' : ''}${product.color || ''}</div>
       <div class="pd-price mono">${fmtPrice(product.price)}</div>
-      <div class="pd-price-lbl">LIST PRICE · NEGOTIABLE</div>
+      <div class="pd-price-lbl">${sold ? 'SOLD — CHECK BACK FOR RESTOCK' : 'LIST PRICE · NEGOTIABLE'}</div>
       <div class="specs">
         <div class="spec-row"><span class="k">Brand</span><span>${product.brand}</span></div>
         <div class="spec-row"><span class="k">Model</span><span>${product.model}</span></div>
@@ -100,14 +113,31 @@ async function load() {
         ${product.storage ? `<div class="spec-row"><span class="k">Storage</span><span>${product.storage}</span></div>` : ''}
         ${product.color ? `<div class="spec-row"><span class="k">Color</span><span>${product.color}</span></div>` : ''}
         <div class="spec-row"><span class="k">Condition</span><span>${product.condition}</span></div>
-        <div class="spec-row"><span class="k">In stock</span><span>${product.stock}</span></div>
+        <div class="spec-row"><span class="k">In stock</span><span>${sold ? 'Sold out' : product.stock}</span></div>
       </div>
+      ${sold ? `
       <div class="pd-actions">
-        <button class="btn btn-primary" onclick="openOffer()">Make an offer</button>
-        <a class="btn btn-ghost" href="/sell">Trade this in instead</a>
+        <a class="btn btn-ghost" href="/#shop" style="width:100%;">See what else is in stock</a>
+      </div>
+      ` : `
+      <div class="pd-actions">
+        <a class="btn btn-primary" href="/checkout?id=${product.id}">Buy now</a>
+        <button class="btn btn-ghost" onclick="openOffer()">Make an offer</button>
+      </div>
+      `}
+      <div class="pd-actions" style="margin-top:10px;">
+        <a class="btn btn-ghost" href="/sell" style="width:100%;">Trade this in instead</a>
       </div>
     </div>
   `;
+
+  document.querySelectorAll('.pd-thumbs img').forEach((thumb) => {
+    thumb.addEventListener('click', () => {
+      document.querySelectorAll('.pd-thumbs img').forEach((t) => t.classList.remove('active'));
+      thumb.classList.add('active');
+      document.querySelector('#pd-main-img img').src = gallery[Number(thumb.dataset.i)];
+    });
+  });
 }
 
 function openOffer() {
@@ -116,14 +146,20 @@ function openOffer() {
 }
 function closeOffer() { document.getElementById('offer-overlay').classList.remove('open'); }
 
+let offerChannel = 'whatsapp';
+document.querySelectorAll('#offer-form button[type=submit]').forEach((btn) => {
+  btn.addEventListener('click', () => { offerChannel = btn.dataset.channel; });
+});
+
 document.getElementById('offer-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const fd = new FormData(e.target);
-  const body = { productId: id, amount: fd.get('amount'), name: fd.get('name'), phone: fd.get('phone'), message: fd.get('message') };
+  const body = { productId: id, amount: fd.get('amount'), name: fd.get('name'), phone: fd.get('phone'), email: fd.get('email'), message: fd.get('message') };
   try {
-    const { whatsappUrl } = await api('/api/offers', { method: 'POST', body });
-    toast('Offer saved — opening WhatsApp…');
-    window.open(whatsappUrl, '_blank');
+    const { whatsappUrl, mailtoUrl } = await api('/api/offers', { method: 'POST', body });
+    const url = offerChannel === 'email' ? mailtoUrl : whatsappUrl;
+    toast(offerChannel === 'email' ? 'Offer saved — opening your email app…' : 'Offer saved — opening WhatsApp…');
+    window.open(url, offerChannel === 'email' ? '_self' : '_blank');
     closeOffer();
     e.target.reset();
   } catch (err) {

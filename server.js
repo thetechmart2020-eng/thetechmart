@@ -9,6 +9,8 @@ const fs = require('fs');
 const db = require('./db');
 const { uploadBuffer } = require('./lib/storage');
 const { setAdminCookie, clearAdminCookie, isAdminRequest } = require('./lib/auth');
+const payments = require('./lib/payments');
+const { generateQuotePdf, generateInvoicePdf } = require('./lib/documents');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -22,6 +24,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 const csvUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } });
 const imageUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
 const tradeinUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
+const bulkImageUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024, files: 60 } });
 
 // ---------- Helpers ----------
 function requireAdmin(req, res, next) {
@@ -31,6 +34,57 @@ function requireAdmin(req, res, next) {
 
 function waLink(number, message) {
   return `https://wa.me/${number}?text=${encodeURIComponent(message)}`;
+}
+
+function mailtoLink(email, subject, body) {
+  return `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
+// Customers type their number in local SA format (0821234567); wa.me needs the
+// international form with no leading 0. Store-facing links already store the
+// number with a country code, but this normalizes customer-entered numbers
+// when the admin is the one sending a message TO them.
+function toIntlPhone(phone) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.startsWith('0')) return '27' + digits.slice(1);
+  return digits;
+}
+
+// ---------- Bulk photo matching (filename → product) ----------
+// Turns "Apple iPhone 13 128GB Blue" into "apple-iphone-13-128gb-blue" so a
+// product and a photo filename can be compared the same way regardless of
+// spacing/casing/punctuation.
+function slugify(s) {
+  return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+function productFullKey(p) {
+  return slugify([p.brand, p.model, p.storage, p.color].filter(Boolean).join('-'));
+}
+function productBrandModelKey(p) {
+  return slugify([p.brand, p.model].filter(Boolean).join('-'));
+}
+
+// Matches an uploaded file's name (minus extension) against the product list.
+// Tries an exact brand+model+storage+color match first (most specific), then
+// falls back to brand+model alone if that's unambiguous. Returns
+// { product } | { ambiguous: [...] } | {} (no match).
+function matchFilenameToProduct(filename, products) {
+  const base = filename.replace(/\.[a-z0-9]+$/i, '');
+  const fileSlug = slugify(base);
+  if (!fileSlug) return {};
+
+  const exact = products.find((p) => productFullKey(p) === fileSlug);
+  if (exact) return { product: exact };
+
+  const byBrandModel = products.filter((p) => {
+    const key = productBrandModelKey(p);
+    return key && (fileSlug === key || fileSlug.startsWith(key + '-') || fileSlug.includes(key));
+  });
+  if (byBrandModel.length === 1) return { product: byBrandModel[0] };
+  if (byBrandModel.length > 1) return { ambiguous: byBrandModel.map((p) => `${p.brand} ${p.model} ${p.storage || ''}`.trim()) };
+
+  return {};
 }
 
 function asyncRoute(fn) {
@@ -44,7 +98,12 @@ function asyncRoute(fn) {
 
 app.get('/api/config', asyncRoute(async (req, res) => {
   const cfg = await db.getConfig();
-  res.json({ storeName: cfg.storeName });
+  res.json({
+    storeName: cfg.storeName,
+    whatsappNumber: cfg.whatsappNumber,
+    contactEmail: cfg.contactEmail,
+    paymentProviders: payments.listProviders(cfg.paymentSettings).map(({ key, label, description, live }) => ({ key, label, description, live }))
+  });
 }));
 
 app.get('/api/products', asyncRoute(async (req, res) => {
@@ -80,21 +139,25 @@ app.post('/api/track', asyncRoute(async (req, res) => {
 }));
 
 app.post('/api/offers', asyncRoute(async (req, res) => {
-  const { productId, amount, name, phone, message } = req.body;
+  const { productId, amount, name, phone, email, message } = req.body;
   const product = await db.getProduct(productId);
   if (!product) return res.status(404).json({ error: 'Product not found' });
   if (!amount || !name || !phone) return res.status(400).json({ error: 'Missing required fields' });
 
   const offer = await db.addOffer({
     productId, productName: `${product.brand} ${product.model}`, listPrice: product.price,
-    amount: Number(amount), name, phone, message: message || ''
+    amount: Number(amount), name, phone, email: email || '', message: message || ''
   });
   await db.logEvent({ type: 'offer_submitted', productId }).catch(() => {});
 
   const cfg = await db.getConfig();
   const waMessage = `Hi TheTechMart! I'd like to make an offer.\n\nDevice: ${offer.productName}\nList price: R${offer.listPrice}\nMy offer: R${offer.amount}\nName: ${name}\nContact: ${phone}\n${message ? 'Note: ' + message : ''}\n\n(Offer ref: ${offer.id.slice(0, 8)})`;
 
-  res.json({ offer, whatsappUrl: waLink(cfg.whatsappNumber, waMessage) });
+  res.json({
+    offer,
+    whatsappUrl: waLink(cfg.whatsappNumber, waMessage),
+    mailtoUrl: mailtoLink(cfg.contactEmail, `Offer on ${offer.productName} (ref ${offer.id.slice(0, 8)})`, waMessage)
+  });
 }));
 
 app.post('/api/tradeins', tradeinUpload.array('photos', 6), asyncRoute(async (req, res) => {
@@ -115,7 +178,81 @@ app.post('/api/tradeins', tradeinUpload.array('photos', 6), asyncRoute(async (re
   const cfg = await db.getConfig();
   const waMessage = `Hi TheTechMart! I'd like to ${submission.type === 'trade' ? 'trade in' : 'sell'} a device.\n\nDevice: ${brand} ${model}\nStorage: ${storage || 'N/A'}\nCondition: ${condition || 'N/A'}\n${askingPrice ? 'Asking price: R' + askingPrice : ''}\nName: ${name}\nContact: ${phone}\n${notes ? 'Notes: ' + notes : ''}\n\n(Ref: ${submission.id.slice(0, 8)})`;
 
-  res.json({ submission, whatsappUrl: waLink(cfg.whatsappNumber, waMessage) });
+  res.json({
+    submission,
+    whatsappUrl: waLink(cfg.whatsappNumber, waMessage),
+    mailtoUrl: mailtoLink(cfg.contactEmail, `${submission.type === 'trade' ? 'Trade-in' : 'Sell'} request: ${brand} ${model} (ref ${submission.id.slice(0, 8)})`, waMessage)
+  });
+}));
+
+// ================= CHECKOUT (Buy Now → order + delivery + payment) =================
+//
+// Ready for Yoco / PayJustNow / Happy Pay: pass paymentMethod as one of those keys
+// and, once an admin has switched that gateway on with real credentials, this
+// creates a real hosted-checkout redirect. Until then (or if paymentMethod is
+// "manual"), the order is created as pending and the customer is handed off to
+// WhatsApp or email to confirm payment/delivery — same conversational flow the
+// business already runs on WhatsApp today.
+app.post('/api/checkout', asyncRoute(async (req, res) => {
+  const { productId, name, email, phone, address, fulfillmentMethod, paymentMethod, notes } = req.body;
+  if (!name || !phone || !email) return res.status(400).json({ error: 'Name, email and phone are required' });
+
+  const product = await db.getProduct(productId);
+  if (!product) return res.status(404).json({ error: 'Product not found' });
+  if (!product.active || product.stock < 1) return res.status(400).json({ error: 'This device is no longer available' });
+
+  const method = fulfillmentMethod === 'collection' ? 'collection' : 'delivery';
+  if (method === 'delivery') {
+    if (!address || !address.line1 || !address.city || !address.postalCode) {
+      return res.status(400).json({ error: 'Delivery address (address, city, postal code) is required for Courier Guy delivery' });
+    }
+  }
+
+  const cfg = await db.getConfig();
+  const wantsGateway = ['yoco', 'payjustnow', 'happypay'].includes(paymentMethod);
+
+  const order = await db.addOrder({
+    type: 'sale', source: 'checkout', productId: product.id,
+    customerName: name, customerPhone: phone, customerEmail: email,
+    deliveryAddress: method === 'delivery' ? address : {}, fulfillmentMethod: method,
+    courier: 'Courier Guy', paymentMethod: wantsGateway ? paymentMethod : 'manual',
+    paymentStatus: 'pending', amount: product.price,
+    notes: notes || ''
+  });
+
+  const addressLine = method === 'delivery'
+    ? `${address.line1}${address.line2 ? ', ' + address.line2 : ''}, ${address.city}, ${address.postalCode}${address.province ? ', ' + address.province : ''}`
+    : 'Collecting in-store';
+
+  if (wantsGateway) {
+    try {
+      const result = await payments.createCheckout(paymentMethod, order, cfg.paymentSettings);
+      await db.updateOrder(order.id, { paymentRef: result.providerRef || '' });
+      return res.json({ order, redirectUrl: result.redirectUrl });
+    } catch (err) {
+      // Gateway not actually live yet (or the call failed) — fall back to the
+      // manual handoff rather than dead-ending the customer.
+      console.warn(`[checkout] ${paymentMethod} unavailable, falling back to manual: ${err.message}`);
+    }
+  }
+
+  const summary = `Hi TheTechMart! I'd like to buy this device.\n\nDevice: ${product.brand} ${product.model}${product.storage ? ' · ' + product.storage : ''}\nPrice: R${product.price}\nName: ${name}\nEmail: ${email}\nContact: ${phone}\nFulfillment: ${method === 'delivery' ? 'Courier Guy delivery to ' + addressLine : 'In-store collection'}\n${notes ? 'Notes: ' + notes : ''}\n\n(Order ref: ${order.id.slice(0, 8)})`;
+
+  res.json({
+    order,
+    whatsappUrl: waLink(cfg.whatsappNumber, summary),
+    mailtoUrl: mailtoLink(cfg.contactEmail, `Order: ${product.brand} ${product.model} (ref ${order.id.slice(0, 8)})`, summary)
+  });
+}));
+
+app.get('/api/orders/:id', asyncRoute(async (req, res) => {
+  const order = await db.getOrder(req.params.id);
+  if (!order) return res.status(404).json({ error: 'Not found' });
+  // Public read-only slice — enough for the "order confirmed" page, nothing else.
+  res.json({
+    id: order.id, status: order.status, paymentStatus: order.paymentStatus,
+    fulfillmentMethod: order.fulfillmentMethod, courier: order.courier, amount: order.amount
+  });
 }));
 
 // ================= ADMIN AUTH =================
@@ -244,12 +381,65 @@ app.delete('/api/admin/products/:id', requireAdmin, asyncRoute(async (req, res) 
   res.json({ ok: true });
 }));
 
+// Single-product photo upload (from the "Photo" button in Stock). Adds to that
+// product's gallery, and sets it as the cover shot only if there isn't one yet.
 app.post('/api/admin/products/:id/image', requireAdmin, imageUpload.single('image'), asyncRoute(async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No image uploaded' });
-  const imageUrl = await uploadBuffer('product-images', req.file);
-  const p = await db.updateProduct(req.params.id, { imageUrl });
-  if (!p) return res.status(404).json({ error: 'Not found' });
+  const existing = await db.getProduct(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Not found' });
+  const url = await uploadBuffer('product-images', req.file);
+  const images = [...(existing.images || []), url];
+  const patch = { images };
+  if (!existing.imageUrl) patch.imageUrl = url;
+  const p = await db.updateProduct(req.params.id, patch);
   res.json(p);
+}));
+
+// Removes one photo from a product's gallery. If it was the cover shot, the
+// next remaining photo (if any) becomes the new cover.
+app.delete('/api/admin/products/:id/image', requireAdmin, asyncRoute(async (req, res) => {
+  const { url } = req.body;
+  const existing = await db.getProduct(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Not found' });
+  const images = (existing.images || []).filter((u) => u !== url);
+  const patch = { images };
+  if (existing.imageUrl === url) patch.imageUrl = images[0] || null;
+  const p = await db.updateProduct(req.params.id, patch);
+  res.json(p);
+}));
+
+// Bulk photo upload: drop in a folder of files named like
+// "apple-iphone-13-128gb-blue.jpg" (spacing/casing/punctuation don't matter)
+// and each one gets matched to the right product by brand+model(+storage+color)
+// and added to its gallery — no per-SKU clicking through the admin panel.
+app.post('/api/admin/products/bulk-images', requireAdmin, bulkImageUpload.array('images', 60), asyncRoute(async (req, res) => {
+  if (!req.files || !req.files.length) return res.status(400).json({ error: 'No images uploaded' });
+  const products = await db.listProducts();
+
+  const results = [];
+  for (const file of req.files) {
+    const { product, ambiguous } = matchFilenameToProduct(file.originalname, products);
+    if (!product) {
+      results.push({
+        filename: file.originalname, matched: false,
+        reason: ambiguous ? `Matches multiple products (${ambiguous.join(', ')}) — rename more specifically` : 'No matching product found'
+      });
+      continue;
+    }
+    try {
+      const url = await uploadBuffer('product-images', file);
+      const current = await db.getProduct(product.id);
+      const images = [...(current.images || []), url];
+      const patch = { images };
+      if (!current.imageUrl) patch.imageUrl = url;
+      await db.updateProduct(product.id, patch);
+      results.push({ filename: file.originalname, matched: true, product: `${product.brand} ${product.model}` });
+    } catch (err) {
+      results.push({ filename: file.originalname, matched: false, reason: err.message });
+    }
+  }
+
+  res.json({ results, matched: results.filter((r) => r.matched).length, total: results.length });
 }));
 
 // ================= ADMIN: OFFERS =================
@@ -269,6 +459,32 @@ app.post('/api/admin/offers/:id/:action', requireAdmin, asyncRoute(async (req, r
   const result = await db.acceptOffer(id);
   if (!result) return res.status(404).json({ error: 'Not found' });
   res.json(result.offer);
+}));
+
+// Quote at sale inquiry — an admin can generate one for an offer at any stage
+// (pending or accepted). Saves the PDF to Storage and to the offer record, and
+// hands back ready-to-click WhatsApp/email links addressed to the customer.
+app.post('/api/admin/offers/:id/quote', requireAdmin, asyncRoute(async (req, res) => {
+  const offer = await db.getOffer(req.params.id);
+  if (!offer) return res.status(404).json({ error: 'Not found' });
+  const cfg = await db.getConfig();
+
+  const number = `Q-${offer.id.slice(0, 8).toUpperCase()}`;
+  const pdf = await generateQuotePdf({
+    number, cfg,
+    customer: { name: offer.name, phone: offer.phone, email: offer.email },
+    items: [{ label: `${offer.productName} — negotiated offer`, amount: offer.amount }],
+    note: offer.message || ''
+  });
+  const url = await uploadBuffer('documents', { buffer: pdf, mimetype: 'application/pdf', originalname: `${number}.pdf` });
+  await db.updateOfferDocs(offer.id, { quoteNumber: number, quoteUrl: url });
+
+  const message = `Hi ${offer.name}, here's your quote from TheTechMart (ref ${number}):\n${url}\n\nDevice: ${offer.productName}\nYour offer: R${offer.amount}\n\nLet us know if you'd like to go ahead!`;
+  res.json({
+    number, url,
+    whatsappUrl: waLink(toIntlPhone(offer.phone), message),
+    mailtoUrl: offer.email ? mailtoLink(offer.email, `Your TheTechMart quote (${number})`, message) : null
+  });
 }));
 
 // ================= ADMIN: TRADE-INS =================
@@ -302,6 +518,66 @@ app.put('/api/admin/orders/:id', requireAdmin, asyncRoute(async (req, res) => {
   res.json(o);
 }));
 
+function orderAddressLine(order) {
+  const a = order.deliveryAddress || {};
+  if (order.fulfillmentMethod === 'collection' || !a.line1) return null;
+  return [a.line1, a.line2, a.city, a.postalCode, a.province].filter(Boolean).join(', ');
+}
+
+// Quote at sale inquiry — for a checkout order that hasn't been paid yet.
+app.post('/api/admin/orders/:id/quote', requireAdmin, asyncRoute(async (req, res) => {
+  const order = await db.getOrder(req.params.id);
+  if (!order) return res.status(404).json({ error: 'Not found' });
+  const cfg = await db.getConfig();
+  const product = order.productId ? await db.getProduct(order.productId).catch(() => null) : null;
+
+  const number = `Q-${order.id.slice(0, 8).toUpperCase()}`;
+  const pdf = await generateQuotePdf({
+    number, cfg,
+    customer: { name: order.customerName, phone: order.customerPhone, email: order.customerEmail, address: orderAddressLine(order) },
+    items: [{ label: product ? `${product.brand} ${product.model}` : (order.notes || 'Device'), amount: order.amount }],
+    note: order.notes || ''
+  });
+  const url = await uploadBuffer('documents', { buffer: pdf, mimetype: 'application/pdf', originalname: `${number}.pdf` });
+  await db.updateOrder(order.id, { quoteNumber: number, quoteUrl: url });
+
+  const message = `Hi ${order.customerName}, here's your quote from TheTechMart (ref ${number}):\n${url}\n\nTotal: R${order.amount}\n\nLet us know if you'd like to go ahead!`;
+  res.json({
+    number, url,
+    whatsappUrl: waLink(toIntlPhone(order.customerPhone), message),
+    mailtoUrl: order.customerEmail ? mailtoLink(order.customerEmail, `Your TheTechMart quote (${number})`, message) : null
+  });
+}));
+
+// Invoice after payment — admin triggers this once payment_status is 'paid'
+// (or whenever they judge it's appropriate), same PDF pipeline as the quote.
+app.post('/api/admin/orders/:id/invoice', requireAdmin, asyncRoute(async (req, res) => {
+  const order = await db.getOrder(req.params.id);
+  if (!order) return res.status(404).json({ error: 'Not found' });
+  const cfg = await db.getConfig();
+  const product = order.productId ? await db.getProduct(order.productId).catch(() => null) : null;
+
+  const number = `INV-${order.id.slice(0, 8).toUpperCase()}`;
+  const addressLine = orderAddressLine(order);
+  const pdf = await generateInvoicePdf({
+    number, cfg,
+    customer: { name: order.customerName, phone: order.customerPhone, email: order.customerEmail, address: addressLine },
+    items: [{ label: product ? `${product.brand} ${product.model}` : (order.notes || 'Device'), amount: order.amount }],
+    paymentStatus: order.paymentStatus, paymentMethod: order.paymentMethod,
+    fulfillment: order.fulfillmentMethod === 'collection' ? 'In-store collection' : `${order.courier || 'Courier Guy'} delivery${addressLine ? ' — ' + addressLine : ''}`,
+    note: order.notes || ''
+  });
+  const url = await uploadBuffer('documents', { buffer: pdf, mimetype: 'application/pdf', originalname: `${number}.pdf` });
+  await db.updateOrder(order.id, { invoiceNumber: number, invoiceUrl: url });
+
+  const message = `Hi ${order.customerName}, here's your invoice from TheTechMart (ref ${number}):\n${url}\n\nTotal: R${order.amount}\nStatus: ${order.paymentStatus === 'paid' ? 'PAID' : order.paymentStatus}\n\nThanks for your business!`;
+  res.json({
+    number, url,
+    whatsappUrl: waLink(toIntlPhone(order.customerPhone), message),
+    mailtoUrl: order.customerEmail ? mailtoLink(order.customerEmail, `Your TheTechMart invoice (${number})`, message) : null
+  });
+}));
+
 // ================= ADMIN: ANALYTICS =================
 
 app.get('/api/admin/analytics', requireAdmin, asyncRoute(async (req, res) => {
@@ -311,11 +587,24 @@ app.get('/api/admin/analytics', requireAdmin, asyncRoute(async (req, res) => {
 // ================= ADMIN: SETTINGS =================
 
 app.get('/api/admin/config', requireAdmin, asyncRoute(async (req, res) => {
-  res.json(await db.getConfig());
+  const cfg = await db.getConfig();
+  res.json({ ...cfg, paymentProviders: payments.listProviders(cfg.paymentSettings) });
 }));
 
 app.put('/api/admin/config', requireAdmin, asyncRoute(async (req, res) => {
   res.json(await db.updateConfig(req.body));
+}));
+
+// Toggle a single payment gateway on/off (the checkbox in Admin > Settings). Turning
+// one "on" without its env vars set just means it stays shown as unconfigured — see
+// GET /api/admin/config's paymentProviders[].configured.
+app.put('/api/admin/config/payments/:key', requireAdmin, asyncRoute(async (req, res) => {
+  const { key } = req.params;
+  if (!['yoco', 'payjustnow', 'happypay'].includes(key)) return res.status(400).json({ error: 'Unknown provider' });
+  const cfg = await db.getConfig();
+  const nextSettings = { ...cfg.paymentSettings, [key]: { enabled: !!req.body.enabled } };
+  const updated = await db.updateConfig({ paymentSettings: nextSettings });
+  res.json({ ...updated, paymentProviders: payments.listProviders(updated.paymentSettings) });
 }));
 
 // ================= PAGES =================
@@ -366,6 +655,8 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+app.get('/checkout', (req, res) => res.sendFile(path.join(__dirname, 'views/checkout.html')));
+app.get('/checkout/complete', (req, res) => res.sendFile(path.join(__dirname, 'views/checkout-complete.html')));
 app.get('/sell', (req, res) => res.sendFile(path.join(__dirname, 'views/sell.html')));
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'views/admin/login.html')));
 app.get('/admin/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'views/admin/dashboard.html')));

@@ -90,8 +90,11 @@
         <label>Anything else?</label>
         <textarea name="notes" placeholder="Battery health, accessories included, faults…"></textarea>
       </div>
-      <button type="submit" class="btn btn-primary btn-block">Submit for review</button>
-      <p class="helper">This sends your details to us and opens WhatsApp so you can confirm — we'll come back with a firm offer.</p>
+      <div class="checkout-actions">
+        <button type="submit" data-channel="whatsapp" class="btn btn-primary btn-block">Submit via WhatsApp</button>
+        <button type="submit" data-channel="email" class="btn btn-ghost btn-block" style="margin-top:10px;">Submit via Email</button>
+      </div>
+      <p class="helper">This sends your details to us and opens WhatsApp or your email app so you can confirm — we'll come back with a firm offer.</p>
     </form>
   </div>
 </div>
@@ -136,6 +139,11 @@ photosInput.addEventListener('change', () => {
   dropzone.textContent = `${photosInput.files.length} photo(s) selected — click to change`;
 });
 
+let sellChannel = 'whatsapp';
+document.querySelectorAll('#tradein-form button[type=submit]').forEach((btn) => {
+  btn.addEventListener('click', () => { sellChannel = btn.dataset.channel; });
+});
+
 document.getElementById('tradein-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const fd = new FormData(e.target);
@@ -146,8 +154,9 @@ document.getElementById('tradein-form').addEventListener('submit', async (e) => 
     const res = await fetch('/api/tradeins', { method: 'POST', body: fd });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Something went wrong');
-    toast('Submitted — opening WhatsApp…');
-    window.open(data.whatsappUrl, '_blank');
+    const url = sellChannel === 'email' ? data.mailtoUrl : data.whatsappUrl;
+    toast(sellChannel === 'email' ? 'Submitted — opening your email app…' : 'Submitted — opening WhatsApp…');
+    window.open(url, sellChannel === 'email' ? '_self' : '_blank');
     e.target.reset();
     document.getElementById('thumbs').innerHTML = '';
     dropzone.textContent = 'Click to add photos (screen, back, any damage)';

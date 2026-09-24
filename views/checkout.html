@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Checkout — TheTechMart</title>
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" href="/img/favicon.png">
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="wrap">
+    <a href="/" class="brand"><img class="logo-mark" src="/img/logo.png" alt="TheTechMart"></a>
+    <div class="nav-links">
+      <a href="/#shop">Shop</a>
+      <a href="/sell">Sell / Trade-in</a>
+    </div>
+    <a href="/sell" class="nav-cta">Get a quote</a>
+  </div>
+</nav>
+
+<div class="chat-page">
+  <div class="chat-head">
+    <div class="eyebrow">Checkout</div>
+    <h1>Let's get your device to you.</h1>
+    <p class="sub">This works just like messaging us on WhatsApp — answer a few quick questions and we'll confirm the order with you directly.</p>
+  </div>
+
+  <div class="chat-thread" id="thread">
+    <div class="empty">Loading device…</div>
+  </div>
+</div>
+
+<footer class="footer">
+  <div class="wrap">
+    <span>© TheTechMart — "the #1 electronics market"</span>
+    <div class="footer-links">
+      <a href="https://wa.me/27716623565" target="_blank" rel="noopener">WhatsApp</a>
+      <a href="mailto:thetechmart2020@gmail.com">Email</a>
+      <a href="https://instagram.com/the_tech_mart" target="_blank" rel="noopener">Instagram</a>
+      <a href="https://web.facebook.com/thulani.molefi/?_rdc=1&_rdr#" target="_blank" rel="noopener">Facebook</a>
+      <a href="https://x.com/TheTechMart3" target="_blank" rel="noopener">X</a>
+    </div>
+  </div>
+</footer>
+
+<script src="/js/common.js"></script>
+<script>
+const id = new URLSearchParams(location.search).get('id');
+let product = null;
+let cfg = null;
+let fulfillment = 'delivery';
+let payMethod = 'manual';
+
+const thread = document.getElementById('thread');
+
+function bubble(html, opts = {}) {
+  const el = document.createElement('div');
+  el.className = 'bubble ' + (opts.from === 'you' ? 'from-you' : 'from-bot');
+  el.innerHTML = html;
+  thread.appendChild(el);
+  window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+  return el;
+}
+
+async function init() {
+  thread.innerHTML = '';
+  try {
+    [product, cfg] = await Promise.all([api('/api/products/' + id), api('/api/config')]);
+  } catch (e) {
+    bubble(`Couldn't find that device. <a href="/" style="color:var(--accent)">Back to shop</a>`);
+    return;
+  }
+
+  bubble(`
+    <div class="chat-product">
+      <div class="chat-product-img">${productImage(product)}</div>
+      <div>
+        <div class="chat-product-title">${product.brand} ${product.model}</div>
+        <div class="chat-product-sub">${product.storage || ''}${product.storage && product.color ? ' · ' : ''}${product.color || ''} · ${product.condition}</div>
+        <div class="chat-product-price mono">${fmtPrice(product.price)}</div>
+      </div>
+    </div>
+    <p>Great choice 👍 Let's get this sorted — where should it go?</p>
+  `);
+
+  renderFulfillmentStep();
+}
+
+function renderFulfillmentStep() {
+  const el = bubble(`
+    <div class="type-toggle" style="margin-bottom:0;">
+      <button type="button" class="active" data-v="delivery">Courier Guy delivery
+        <span class="tt-desc">Straight to your door, nationwide</span>
+      </button>
+      <button type="button" data-v="collection">Collect in-store
+        <span class="tt-desc">Pop in and grab it yourself</span>
+      </button>
+    </div>
+  `);
+  el.querySelectorAll('.type-toggle button').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      el.querySelectorAll('button').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      fulfillment = btn.dataset.v;
+    });
+  });
+
+  const cont = bubble(`<button class="btn btn-primary btn-sm" id="go-details">Continue</button>`, { from: 'you' });
+  cont.querySelector('#go-details').addEventListener('click', () => {
+    cont.querySelector('#go-details').remove();
+    renderDetailsStep();
+  });
+}
+
+function renderDetailsStep() {
+  const el = bubble(`
+    <p>Perfect. ${fulfillment === 'delivery' ? "What's the delivery address, and who should we send it to?" : "Who's collecting, and how can we reach you?"}</p>
+    <form id="details-form" class="chat-form">
+      <div class="field-row">
+        <div class="field"><label>Full name</label><input type="text" name="name" required></div>
+        <div class="field"><label>Phone (WhatsApp)</label><input type="tel" name="phone" required placeholder="e.g. 0821234567"></div>
+      </div>
+      <div class="field"><label>Email</label><input type="email" name="email" required placeholder="you@example.com"></div>
+      ${fulfillment === 'delivery' ? `
+      <div class="field"><label>Street address</label><input type="text" name="line1" required placeholder="Street, unit/complex"></div>
+      <div class="field"><label>Suburb / area (optional)</label><input type="text" name="line2"></div>
+      <div class="field-row">
+        <div class="field"><label>City</label><input type="text" name="city" required></div>
+        <div class="field"><label>Postal code</label><input type="text" name="postalCode" required></div>
+      </div>
+      <div class="field"><label>Province</label><input type="text" name="province" placeholder="e.g. Gauteng"></div>
+      ` : ''}
+      <div class="field"><label>Anything we should know? (optional)</label><textarea name="notes"></textarea></div>
+      <button type="submit" class="btn btn-primary btn-block">Continue to payment</button>
+    </form>
+  `);
+  el.querySelector('#details-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    window._details = Object.fromEntries(fd.entries());
+    el.querySelector('#details-form').querySelectorAll('input,textarea,button').forEach((i) => i.disabled = true);
+    bubble(`<p>${window._details.name} · ${window._details.phone} · ${window._details.email}${fulfillment === 'delivery' ? '<br>' + [window._details.line1, window._details.line2, window._details.city, window._details.postalCode, window._details.province].filter(Boolean).join(', ') : '<br>Collecting in-store'}</p>`, { from: 'you' });
+    renderPaymentStep();
+  });
+}
+
+function providerCard(p) {
+  const disabled = !p.live;
+  return `
+    <label class="pay-option ${disabled ? 'disabled' : ''}">
+      <input type="radio" name="pay" value="${p.key}" ${disabled ? 'disabled' : ''}>
+      <div>
+        <div class="pay-option-title">${p.label} ${disabled ? '<span class="soon">Coming soon</span>' : ''}</div>
+        <div class="pay-option-desc">${p.description}</div>
+      </div>
+    </label>
+  `;
+}
+
+function renderPaymentStep() {
+  const providers = (cfg.paymentProviders || []);
+  const el = bubble(`
+    <p>How would you like to pay?</p>
+    <div class="pay-options">
+      ${providers.map(providerCard).join('')}
+      <label class="pay-option">
+        <input type="radio" name="pay" value="manual" checked>
+        <div>
+          <div class="pay-option-title">EFT / Cash / Arrange with us</div>
+          <div class="pay-option-desc">We'll confirm payment details with you directly over WhatsApp or email.</div>
+        </div>
+      </label>
+    </div>
+    <div class="checkout-actions">
+      <button class="btn btn-primary btn-block" id="pay-whatsapp">Continue on WhatsApp</button>
+      <button class="btn btn-ghost btn-block" id="pay-email" style="margin-top:10px;">Continue by Email</button>
+    </div>
+    <p class="helper" id="checkout-error" style="color:var(--danger);display:none;"></p>
+  `);
+
+  const submit = async (channel) => {
+    const selected = el.querySelector('input[name=pay]:checked');
+    payMethod = selected ? selected.value : 'manual';
+    const errEl = el.querySelector('#checkout-error');
+    errEl.style.display = 'none';
+    const d = window._details || {};
+    const body = {
+      productId: id, name: d.name, email: d.email, phone: d.phone,
+      fulfillmentMethod: fulfillment, paymentMethod: payMethod, notes: d.notes,
+      address: fulfillment === 'delivery' ? { line1: d.line1, line2: d.line2, city: d.city, postalCode: d.postalCode, province: d.province } : undefined
+    };
+    try {
+      const result = await api('/api/checkout', { method: 'POST', body });
+      if (result.redirectUrl) {
+        window.location.href = result.redirectUrl;
+        return;
+      }
+      const url = channel === 'email' ? result.mailtoUrl : result.whatsappUrl;
+      bubble(`<p>Order saved ✅ (ref ${result.order.id.slice(0, 8)}). Opening ${channel === 'email' ? 'your email app' : 'WhatsApp'} to confirm — we'll come right back to you.</p>`);
+      window.open(url, channel === 'email' ? '_self' : '_blank');
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.style.display = 'block';
+    }
+  };
+
+  el.querySelector('#pay-whatsapp').addEventListener('click', () => submit('whatsapp'));
+  el.querySelector('#pay-email').addEventListener('click', () => submit('email'));
+}
+
+init();
+api('/api/track', { method: 'POST', body: { type: 'page_view', path: '/checkout' } }).catch(() => {});
+</script>
+</body>
+</html>

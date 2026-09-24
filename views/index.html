@@ -4,9 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TheTechMart — Devices, negotiated fairly</title>
-<meta name="description" content="Buy, sell, and trade phones at TheTechMart. Every listed price is negotiable — make an offer straight over WhatsApp.">
+<meta name="description" content="Buy, sell, and trade phones, laptops, consoles and more at TheTechMart. Every listed price is negotiable — make an offer straight over WhatsApp, and get it delivered by Courier Guy.">
 <meta property="og:title" content="TheTechMart — Devices, negotiated fairly">
-<meta property="og:description" content="Buy, sell, and trade phones at TheTechMart. Every listed price is negotiable — make an offer straight over WhatsApp.">
+<meta property="og:description" content="Buy, sell, and trade tech at TheTechMart. Every listed price is negotiable — make an offer straight over WhatsApp.">
 <meta property="og:image" content="/img/logo.png">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
@@ -17,7 +17,7 @@
   "@context": "https://schema.org",
   "@type": "ElectronicsStore",
   "name": "TheTechMart",
-  "description": "the #1 electronics market — phones bought, sold, and traded, all prices negotiable.",
+  "description": "the #1 electronics market — phones, laptops, consoles & tablets bought, sold, and traded, all prices negotiable.",
   "image": "/img/logo.png"
 }
 </script>
@@ -29,6 +29,7 @@
     <a href="/" class="brand"><img class="logo-mark" src="/img/logo.png" alt="TheTechMart"></a>
     <div class="nav-links">
       <a href="/#shop">Shop</a>
+      <a href="/#how">How it works</a>
       <a href="/sell">Sell / Trade-in</a>
     </div>
     <a href="/sell" class="nav-cta">Get a quote</a>
@@ -40,17 +41,26 @@
 </div>
 
 <header class="hero">
+  <div class="hero-glow"></div>
   <div class="wrap hero-grid">
     <div>
       <div class="eyebrow">Buy · Sell · Trade · Negotiate</div>
-      <h1>Every price here<br>is a starting point.</h1>
-      <p class="lead">Browse real stock at real prices, then put in your own offer — it goes straight to us on WhatsApp. Got a device to sell or trade? We'll quote you back fast.</p>
+      <h1>Every price here<br>is a <span class="accent-text">starting point.</span></h1>
+      <p class="lead">Browse real stock at real prices, then put in your own offer — it goes straight to us on WhatsApp or email. Got a device to sell or trade? We'll quote you back fast. Ready to buy? Checkout in minutes with Courier Guy delivery to your door.</p>
       <div class="hero-actions">
         <a href="#shop" class="btn btn-primary">Browse devices</a>
         <a href="/sell" class="btn btn-ghost">Sell your device</a>
       </div>
+      <div class="trust-row">
+        <span>✅ Verified pre-owned stock</span>
+        <span>💬 Negotiate on WhatsApp</span>
+        <span>🚚 Courier Guy nationwide</span>
+      </div>
     </div>
     <div class="quote-card">
+      <div class="quote-card-head">
+        <span class="quote-dot"></span> Live on WhatsApp right now
+      </div>
       <div class="quote-row"><span class="name">iPhone 13 128GB</span><span class="val">— asking R8 400</span></div>
       <div class="quote-row"><span class="name">Samsung S22 Ultra</span><span class="val">— asking R9 100</span></div>
       <div class="quote-row"><span class="name">Your offer</span><span class="mono" style="color:var(--accent)">→ sent via WhatsApp</span></div>
@@ -59,12 +69,24 @@
   </div>
 </header>
 
+<section class="section section-cats">
+  <div class="wrap">
+    <div class="section-head">
+      <div>
+        <h2>Shop by category</h2>
+        <p>Phones, laptops, consoles, tablets and audio — all negotiable.</p>
+      </div>
+    </div>
+    <div class="cat-grid" id="cat-grid"></div>
+  </div>
+</section>
+
 <section class="section" id="shop">
   <div class="wrap">
     <div class="section-head">
       <div>
         <h2>Current stock</h2>
-        <p>All prices negotiable — make an offer on any listing.</p>
+        <p>All prices negotiable — make an offer, or buy now for instant checkout.</p>
       </div>
     </div>
     <div class="filters">
@@ -82,6 +104,50 @@
   </div>
 </section>
 
+<section class="section section-how" id="how">
+  <div class="wrap">
+    <div class="section-head">
+      <div>
+        <h2>Just like chatting with us on WhatsApp</h2>
+        <p>The whole site works the way we already do business — conversational, fast, no pressure.</p>
+      </div>
+    </div>
+    <div class="how-grid">
+      <div class="how-step">
+        <div class="how-bubble">
+          <span class="how-num">1</span>
+          <p>Browse stock, or send us your device to sell or trade in.</p>
+        </div>
+        <div class="how-title">Find your device</div>
+      </div>
+      <div class="how-step">
+        <div class="how-bubble">
+          <span class="how-num">2</span>
+          <p>Make an offer, or buy now — confirm it over WhatsApp or email, your choice.</p>
+        </div>
+        <div class="how-title">Negotiate &amp; confirm</div>
+      </div>
+      <div class="how-step">
+        <div class="how-bubble">
+          <span class="how-num">3</span>
+          <p>Pay your way, then sit back — Courier Guy delivers straight to your door.</p>
+        </div>
+        <div class="how-title">Get it delivered</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section section-cta">
+  <div class="wrap cta-inner">
+    <div>
+      <h2>Got a device gathering dust?</h2>
+      <p>Sell it for cash or trade it toward something new — we quote fast, over WhatsApp or email.</p>
+    </div>
+    <a href="/sell" class="btn btn-primary">Get a free quote</a>
+  </div>
+</section>
+
 <footer class="footer">
   <div class="wrap">
     <span>© TheTechMart — "the #1 electronics market"</span>
@@ -95,9 +161,36 @@
   </div>
 </footer>
 
+<a class="mobile-cta" href="#shop">Browse devices</a>
+
 <script src="/js/common.js"></script>
 <script>
 let ALL = [];
+
+const CATS = [
+  { name: 'Phones', glyph: '📱' },
+  { name: 'Laptops', glyph: '💻' },
+  { name: 'Consoles', glyph: '🎮' },
+  { name: 'Tablets', glyph: '📲' },
+  { name: 'Audio', glyph: '🎧' },
+  { name: 'Accessories', glyph: '🔌' }
+];
+
+function renderCats() {
+  document.getElementById('cat-grid').innerHTML = CATS.map(c => `
+    <button class="cat-card" data-cat="${c.name}">
+      <span class="cat-glyph">${c.glyph}</span>
+      <span class="cat-name">${c.name}</span>
+    </button>
+  `).join('');
+  document.querySelectorAll('.cat-card').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.getElementById('f-category').value = btn.dataset.cat;
+      applyFilters();
+      document.getElementById('shop').scrollIntoView({ behavior: 'smooth' });
+    });
+  });
+}
 
 function tick() {
   const items = ALL.length ? ALL : [{brand:'iPhone',model:'13',price:8400},{brand:'Samsung',model:'S22',price:9100}];
@@ -111,18 +204,29 @@ function render(list) {
     grid.innerHTML = `<div class="empty" style="grid-column:1/-1">No devices match right now — try clearing a filter, or check back soon.</div>`;
     return;
   }
-  grid.innerHTML = list.map(p => `
-    <a class="card" href="/product?id=${p.id}">
-      <div class="card-img">${productImage(p)}</div>
-      <div class="card-body">
-        <span class="card-tag">${p.condition}</span>
-        <span class="card-tag" style="margin-left:6px;color:var(--text-dim);border-color:var(--line);">${p.category || 'Phones'}</span>
-        <div class="card-title">${p.brand} ${p.model}</div>
-        <div class="card-sub">${p.storage || ''}${p.storage && p.color ? ' · ' : ''}${p.color || ''}</div>
-        <div class="card-price">${fmtPrice(p.price)} <small>list</small></div>
+  grid.innerHTML = list.map(p => {
+    const sold = p.sold || p.stock < 1;
+    return `
+    <div class="card ${sold ? 'card-sold' : ''}">
+      <a class="card-link" href="/product?id=${p.id}">
+        <div class="card-img">${productImage(p)}${sold ? '<span class="sold-badge">SOLD</span>' : ''}</div>
+        <div class="card-body">
+          <span class="card-tag">${p.condition}</span>
+          <span class="card-tag" style="margin-left:6px;color:var(--text-dim);border-color:var(--line);">${p.category || 'Phones'}</span>
+          <div class="card-title">${p.brand} ${p.model}</div>
+          <div class="card-sub">${p.storage || ''}${p.storage && p.color ? ' · ' : ''}${p.color || ''}</div>
+          <div class="card-price">${fmtPrice(p.price)} <small>list</small></div>
+        </div>
+      </a>
+      <div class="card-actions">
+        ${sold
+          ? `<span class="btn btn-ghost btn-sm btn-block" style="opacity:0.5;pointer-events:none;">Sold out</span>`
+          : `<a class="btn btn-primary btn-sm btn-block" href="/checkout?id=${p.id}">Buy now</a>
+             <a class="btn btn-ghost btn-sm btn-block" href="/product?id=${p.id}">Make an offer</a>`}
       </div>
-    </a>
-  `).join('');
+    </div>
+  `;
+  }).join('');
 }
 
 function applyFilters() {
@@ -152,6 +256,7 @@ async function load() {
   document.getElementById(id).addEventListener('change', applyFilters);
 });
 
+renderCats();
 load();
 api('/api/track', { method: 'POST', body: { type: 'page_view', path: '/' } }).catch(() => {});
 </script>

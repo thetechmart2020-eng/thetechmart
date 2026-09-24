@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Order status — TheTechMart</title>
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" href="/img/favicon.png">
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="wrap">
+    <a href="/" class="brand"><img class="logo-mark" src="/img/logo.png" alt="TheTechMart"></a>
+  </div>
+</nav>
+
+<div class="chat-page">
+  <div class="chat-thread" id="thread">
+    <div class="empty">Checking your order…</div>
+  </div>
+</div>
+
+<script src="/js/common.js"></script>
+<script>
+const params = new URLSearchParams(location.search);
+const orderId = params.get('order');
+const status = params.get('status');
+
+async function load() {
+  const thread = document.getElementById('thread');
+  thread.innerHTML = '';
+  const el = document.createElement('div');
+  el.className = 'bubble from-bot';
+
+  if (status === 'success') {
+    el.innerHTML = `<p>🎉 Payment received — thank you! We're preparing your device for Courier Guy.</p>`;
+  } else if (status === 'cancelled') {
+    el.innerHTML = `<p>No problem — your order is saved but payment wasn't completed. <a href="/" style="color:var(--accent)">Head back to the shop</a> or message us on WhatsApp to arrange payment another way.</p>`;
+  } else {
+    el.innerHTML = `<p>That payment didn't go through. Your order is still saved — message us on WhatsApp and we'll sort out another way to pay.</p>`;
+  }
+  thread.appendChild(el);
+
+  if (orderId) {
+    try {
+      const order = await api('/api/orders/' + orderId);
+      const info = document.createElement('div');
+      info.className = 'bubble from-bot';
+      info.innerHTML = `<p class="mono" style="font-size:12.5px;">Order ref ${order.id.slice(0, 8)} · ${order.fulfillmentMethod === 'delivery' ? order.courier + ' delivery' : 'In-store collection'} · ${fmtPrice(order.amount)}</p>`;
+      thread.appendChild(info);
+    } catch (e) {}
+  }
+}
+load();
+</script>
+</body>
+</html>

@@ -51,6 +51,92 @@ and accessories is included: `sample-price-list-v2.csv`.
 CSV columns are now: `brand,model,price,category,condition,storage,color,stock,imageUrl` — category is
 optional and defaults to "Phones" if you leave it blank, so your existing CSVs still work unchanged.
 
+## What's new: photo galleries, bulk photo upload, and a "Sold" state
+
+**If your site is already live**, run one more migration — Supabase → SQL Editor → New query, paste in
+the contents of `supabase/migration_005_gallery_and_sold.sql`, and run it. (Fresh installs: already in
+`schema.sql`.)
+
+- **Multiple photos per device** — the product page now shows a full gallery with clickable thumbnails,
+  not just one cover shot. The single "Photo" button in Admin → Stock is now a small gallery manager: add
+  as many photos as you like per device, remove any of them, and the first one you add becomes the cover
+  shown on the storefront grid.
+- **Bulk photo upload, matched by filename** — this is the real fix for "117 SKUs, one photo click each."
+  Under Admin → Stock, drop in a folder of photos named like `apple-iphone-13-128gb-blue.jpg` and it
+  matches and adds each one to the right device automatically (capitalization, spacing, dashes vs.
+  underscores all get normalized, so you don't have to be exact). If the brand+model alone is unique, a
+  shorter filename like `samsung-s22-ultra.jpg` works too. Anything that can't be matched is listed so you
+  know what still needs a rename.
+- **"Sold" instead of vanishing** — selling out a device (stock hits 0 via an accepted offer or a Buy Now
+  checkout) now shows a **SOLD** badge on the listing instead of removing it from the shop entirely.
+  Recently-sold devices are good social proof, and the buttons (Buy now/Make an offer) are disabled on a
+  sold listing rather than the card disappearing. Admin's manual Hide/Unhide toggle is unaffected — that's
+  still your own separate switch for taking something off the shop for any other reason.
+
+## What's new: quotes & invoices
+
+**If your site is already live**, run one more migration — Supabase → SQL Editor → New query, paste in
+the contents of `supabase/migration_006_quotes_invoices.sql`, and run it. Then create one more Storage
+bucket the same way you made `product-images` and `tradein-photos`: **Storage → New bucket → name it
+`documents` → Public bucket: on**. (Fresh installs: `schema.sql` already includes the columns — just
+remember to create the `documents` bucket during setup.)
+
+- **Quote, at sale inquiry** — Admin → Offers now has a **Send quote** button on every offer (pending or
+  accepted), and Admin → Orders has one for every checkout order. It generates a branded PDF (your logo,
+  the device, the price, a 7-day validity note) and saves it — then gives you one-click **WhatsApp** and
+  **Email** buttons addressed straight to that customer, plus a **View** link to the PDF itself.
+- **Invoice, after payment** — Admin → Orders also has a **Send invoice** button, generating a PDF with
+  the payment status, method, and delivery details, same one-click send.
+- **No new account or API key needed** — the PDFs are generated on your own server (via `pdfkit`, a plain
+  code library) and stored in your own Supabase Storage, so there's nothing extra to sign up for or pay
+  for. "Sending" means opening WhatsApp or your email app pre-filled with a link to the PDF — the same
+  pattern as offers and checkout already use, just with a document attached instead of a text summary.
+- Every quote/invoice is saved on its offer/order record, so you (or the customer, if you forward the
+  link) can always pull it back up later — nothing is generated and thrown away.
+- The offer form now has an optional email field, so a customer inquiring about a device can be sent a
+  quote by email too, not just WhatsApp.
+- **Worth knowing**: quote/invoice numbers here (`Q-XXXXXXXX` / `INV-XXXXXXXX`) are derived from the
+  order/offer ID for simplicity, not a strict sequential series. If you're VAT-registered, check with your
+  accountant on SARS's numbering and content requirements for a valid tax invoice before relying on these
+  for tax purposes — this covers the customer-facing quote/invoice, not necessarily every legal requirement.
+
+## What's new: checkout, delivery & payment-gateway readiness
+
+**If your site is already live**, run one more migration first — Supabase → SQL Editor → New query, paste
+in the contents of `supabase/migration_004_checkout_payments.sql`, and run it. (Fresh installs don't need
+this — `schema.sql` already includes everything.)
+
+- **Buy Now / checkout** (`/checkout?id=...`) — a conversational, WhatsApp-style step-by-step flow: pick
+  delivery or in-store collection, enter name/email/phone (+ full address for delivery), choose a payment
+  method, then confirm — same as making an offer, just for an outright purchase. Every product card and the
+  product page now has a **Buy now** button next to **Make an offer**.
+- **Courier Guy delivery** — checkout collects everything Courier Guy needs (address, email, phone) and
+  saves it on the order. Admin → Orders shows the full delivery address per order and lets you attach a
+  tracking/waybill number once you've booked the courier.
+- **Payment gateways, wired but not switched on** — the checkout page already shows Yoco, PayJustNow and
+  Happy Pay as options. Each is a small adapter in `lib/payments/` (`yoco.js`, `payjustnow.js`,
+  `happypay.js`) that's ready to call the real API the moment you have credentials:
+  1. Add that gateway's API key(s) as environment variables in Vercel (see the comment at the top of each
+     adapter file for the exact variable names it looks for, e.g. `YOCO_SECRET_KEY`).
+  2. Flip it on in **Admin → Settings → Payment gateways**.
+  3. It now appears as a real, selectable option at checkout instead of "Coming soon" — customers are sent
+     to that gateway's hosted checkout page and redirected back to an order-status page when done.
+
+  Until a gateway is live (or a customer picks "EFT / Cash / Arrange with us"), checkout works exactly like
+  offers and trade-ins already do: it saves the order and hands the customer to **WhatsApp or email**
+  (their choice) to confirm and arrange payment — nothing breaks or dead-ends if no gateway is switched on
+  yet.
+- **Web → WhatsApp or web → email, everywhere** — offers, trade-in/sell submissions, and checkout all now
+  offer two buttons: "…via WhatsApp" and "…via Email" (to `thetechmart2020@gmail.com`, editable under
+  Admin → Settings → Contact email). Email uses a plain `mailto:` link pre-filled with the same details as
+  the WhatsApp message — no email-sending service or SMTP setup required, so there's nothing extra to break
+  or pay for.
+- **Landing page redesign** — new hero with a live-glow accent, a trust row, a shop-by-category strip
+  (Phones/Laptops/Consoles/Tablets/Audio/Accessories), a "how it works" section that mirrors the real
+  WhatsApp-style flow (find → negotiate & confirm → delivered), a bottom call-to-action banner for
+  sell/trade-in, and a sticky mobile "Browse devices" bar. Product cards on the homepage now have inline
+  **Buy now** / **Make an offer** buttons instead of only linking through.
+
 ## What's new: search/SEO, analytics, order tracking
 
 **If your site is already live**, run one more migration before these work — open Supabase → SQL Editor →

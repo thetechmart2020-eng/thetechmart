@@ -48,6 +48,13 @@
         <input type="file" id="csv-file" accept=".csv">
         <div style="margin-top:12px;"><button class="btn btn-primary btn-sm" onclick="uploadCsv()">Upload &amp; sync stock</button></div>
       </div>
+      <div class="upload-box">
+        <div><b>Bulk photo upload</b></div>
+        <div class="helper">Select as many photos as you like at once. Name each file to match the device — e.g. <span class="mono">apple-iphone-13-128gb-blue.jpg</span> — and it's matched and added to that device's gallery automatically. Spacing, capitalization and dashes vs. underscores don't matter; if the brand+model alone is unique (e.g. <span class="mono">samsung-s22-ultra.jpg</span>) that's enough too.</div>
+        <input type="file" id="bulk-image-files" accept="image/*" multiple>
+        <div style="margin-top:12px;"><button class="btn btn-primary btn-sm" onclick="uploadBulkImages()">Upload &amp; match photos</button></div>
+        <div id="bulk-image-results" style="margin-top:14px;"></div>
+      </div>
       <table class="table" id="products-table">
         <thead><tr><th></th><th>Device</th><th>Category</th><th>Condition</th><th>Price</th><th>Stock</th><th>Status</th><th></th></tr></thead>
         <tbody></tbody>
@@ -72,9 +79,9 @@
 
     <section class="admin-panel" id="panel-orders">
       <div class="admin-head"><h2>Orders</h2></div>
-      <p class="helper" style="margin-bottom:16px;">Created automatically when you accept an offer (sale) or a trade-in (purchase). Move each through its pipeline as it happens in real life.</p>
+      <p class="helper" style="margin-bottom:16px;">Created automatically when a customer checks out, or when you accept an offer (sale) or a trade-in (purchase). Move each through its pipeline as it happens in real life.</p>
       <table class="table" id="orders-table">
-        <thead><tr><th>Type</th><th>Customer</th><th>Amount</th><th>Notes</th><th>Status</th><th>Date</th></tr></thead>
+        <thead><tr><th>Type</th><th>Customer</th><th>Delivery</th><th>Payment</th><th>Amount</th><th>Status</th><th>Documents</th><th>Date</th></tr></thead>
         <tbody></tbody>
       </table>
     </section>
@@ -106,10 +113,20 @@
           <input type="text" id="s-whatsapp" placeholder="e.g. 27821234567">
         </div>
         <div class="field">
+          <label>Contact email (used for "web to email" offers/checkout)</label>
+          <input type="email" id="s-email" placeholder="thetechmart2020@gmail.com">
+        </div>
+        <div class="field">
           <label>Admin password</label>
           <input type="text" id="s-password">
         </div>
         <button class="btn btn-primary" onclick="saveSettings()">Save settings</button>
+      </div>
+
+      <h3 style="font-size:15px;margin:28px 0 12px;">Payment gateways</h3>
+      <p class="helper" style="margin-bottom:14px;max-width:60ch;">The checkout page is wired up for these already. Flip one on once you've added its live API keys to your deployment's environment variables — until then, or if it's off, customers checking out are handed off to WhatsApp or email to arrange payment, same as today.</p>
+      <div class="form-card" style="max-width:460px;">
+        <div id="payment-providers"></div>
       </div>
     </section>
 
@@ -121,10 +138,11 @@
   <div class="modal">
     <div class="modal-inner">
       <button class="modal-close" onclick="document.getElementById('img-overlay').classList.remove('open')">&times;</button>
-      <h3>Product photo</h3>
+      <h3>Product photos</h3>
       <p class="sub" id="img-sub"></p>
+      <div class="thumb-row" id="img-gallery" style="margin-bottom:14px;"></div>
       <input type="file" id="img-file" accept="image/*">
-      <button class="btn btn-primary btn-block" style="margin-top:14px;" onclick="uploadImage()">Upload</button>
+      <button class="btn btn-primary btn-block" style="margin-top:14px;" onclick="uploadImage()">Add photo</button>
     </div>
   </div>
 </div>
@@ -183,9 +201,12 @@ function renderProducts() {
       <td>${p.condition}</td>
       <td class="mono">${fmtPrice(p.price)}</td>
       <td>${p.stock}</td>
-      <td><span class="status-pill ${p.active !== false ? 'accepted' : 'rejected'}">${p.active !== false ? 'live' : 'hidden'}</span></td>
+      <td>
+        <span class="status-pill ${p.active !== false ? 'accepted' : 'rejected'}">${p.active !== false ? 'live' : 'hidden'}</span>
+        ${p.stock < 1 ? '<span class="status-pill rejected" style="margin-left:4px;">sold</span>' : ''}
+      </td>
       <td class="row-actions">
-        <button class="btn btn-ghost btn-sm" onclick="openImageModal('${p.id}','${p.brand} ${p.model}')">Photo</button>
+        <button class="btn btn-ghost btn-sm" onclick="openImageModal('${p.id}','${p.brand} ${p.model}')">Photos${p.images && p.images.length ? ` (${p.images.length})` : ''}</button>
         <button class="btn btn-ghost btn-sm" onclick="toggleActive('${p.id}')">${p.active !== false ? 'Hide' : 'Unhide'}</button>
         <button class="btn btn-danger btn-sm" onclick="deleteProduct('${p.id}')">Delete</button>
       </td>
@@ -193,22 +214,52 @@ function renderProducts() {
   `).join('') || `<tr><td colspan="8" class="helper">No stock yet — upload a CSV above to get started.</td></tr>`;
 }
 
+function waLinkClient(phone, text) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  const intl = digits.startsWith('0') ? '27' + digits.slice(1) : digits;
+  return `https://wa.me/${intl}?text=${encodeURIComponent(text)}`;
+}
+function mailtoLinkClient(email, subject, body) {
+  return `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
+function docSendButtons(doc, label, phone, email, message, genFn) {
+  if (!doc || !doc.url) return `<button class="btn btn-ghost btn-sm" onclick="${genFn}('${doc.id}')">Generate ${label.toLowerCase()}</button>`;
+  return `
+    <a class="btn btn-ghost btn-sm" href="${waLinkClient(phone, message)}" target="_blank">WhatsApp</a>
+    ${email ? `<a class="btn btn-ghost btn-sm" href="${mailtoLinkClient(email, `Your TheTechMart ${label.toLowerCase()} (${doc.number})`, message)}">Email</a>` : ''}
+    <a class="btn btn-ghost btn-sm" href="${doc.url}" target="_blank">View ${doc.number}</a>
+    <button class="btn btn-ghost btn-sm" onclick="${genFn}('${doc.id}')">Regenerate</button>
+  `;
+}
+
 function renderOffers() {
-  document.querySelector('#offers-table tbody').innerHTML = OFFERS.map(o => `
+  document.querySelector('#offers-table tbody').innerHTML = OFFERS.map(o => {
+    const message = `Hi ${o.name}, here's your quote from TheTechMart (ref ${o.quoteNumber}):\n${o.quoteUrl}\n\nDevice: ${o.productName}\nYour offer: R${o.amount}\n\nLet us know if you'd like to go ahead!`;
+    return `
     <tr>
       <td>${o.productName}</td>
       <td class="mono">${fmtPrice(o.listPrice)}</td>
       <td class="mono" style="color:var(--accent)">${fmtPrice(o.amount)}</td>
-      <td>${o.name}<br><span class="helper">${o.phone}</span></td>
+      <td>${o.name}<br><span class="helper">${o.phone}${o.email ? ' · ' + o.email : ''}</span></td>
       <td><span class="status-pill ${o.status}">${o.status}</span></td>
-      <td class="row-actions">
+      <td class="row-actions" style="flex-wrap:wrap;">
         ${o.status === 'pending' ? `
           <button class="btn btn-accept btn-sm" onclick="offerAction('${o.id}','accept')">Accept</button>
           <button class="btn btn-danger btn-sm" onclick="offerAction('${o.id}','reject')">Reject</button>
         ` : ''}
+        ${docSendButtons({ id: o.id, url: o.quoteUrl, number: o.quoteNumber }, 'Quote', o.phone, o.email, message, 'generateOfferQuote')}
       </td>
     </tr>
-  `).join('') || `<tr><td colspan="6" class="helper">No offers yet.</td></tr>`;
+  `;
+  }).join('') || `<tr><td colspan="6" class="helper">No offers yet.</td></tr>`;
+}
+async function generateOfferQuote(offerId) {
+  try {
+    await api(`/api/admin/offers/${offerId}/quote`, { method: 'POST' });
+    toast('Quote generated');
+    loadAll();
+  } catch (e) { toast(e.message); }
 }
 
 function renderTradeins() {
@@ -231,21 +282,65 @@ function renderTradeins() {
 }
 
 const ORDER_STATUSES = ['new', 'paid', 'completed', 'cancelled'];
+function fmtAddress(a) {
+  if (!a || !a.line1) return '';
+  return [a.line1, a.line2, a.city, a.postalCode, a.province].filter(Boolean).join(', ');
+}
 function renderOrders() {
-  document.querySelector('#orders-table tbody').innerHTML = ORDERS.map(o => `
+  document.querySelector('#orders-table tbody').innerHTML = ORDERS.map(o => {
+    const line = product => product ? `${product.brand} ${product.model}` : (o.notes || 'Device');
+    const quoteMsg = `Hi ${o.customerName}, here's your quote from TheTechMart (ref ${o.quoteNumber}):\n${o.quoteUrl}\n\nTotal: R${o.amount}\n\nLet us know if you'd like to go ahead!`;
+    const invoiceMsg = `Hi ${o.customerName}, here's your invoice from TheTechMart (ref ${o.invoiceNumber}):\n${o.invoiceUrl}\n\nTotal: R${o.amount}\nStatus: ${o.paymentStatus === 'paid' ? 'PAID' : o.paymentStatus}\n\nThanks for your business!`;
+    return `
     <tr>
       <td><span class="status-pill ${o.type === 'sale' ? 'accepted' : 'pending'}">${o.type}</span></td>
-      <td>${o.customerName}<br><span class="helper">${o.customerPhone}</span></td>
+      <td>${o.customerName}<br><span class="helper">${o.customerPhone}${o.customerEmail ? ' · ' + o.customerEmail : ''}</span></td>
+      <td>
+        ${o.fulfillmentMethod === 'collection'
+          ? `<span class="helper">In-store collection</span>`
+          : `<span class="helper">${o.courier || 'Courier Guy'}${fmtAddress(o.deliveryAddress) ? '<br>' + fmtAddress(o.deliveryAddress) : ''}</span>`}
+        ${o.trackingNumber ? `<div class="helper mono" style="margin-top:4px;">Tracking: ${o.trackingNumber}</div>` : ''}
+        <button class="btn btn-ghost btn-sm" style="margin-top:6px;" onclick="setTracking('${o.id}')">${o.trackingNumber ? 'Edit' : 'Add'} tracking #</button>
+      </td>
+      <td>
+        <span class="helper">${o.paymentMethod || 'manual'}</span><br>
+        <span class="status-pill ${o.paymentStatus === 'paid' ? 'accepted' : o.paymentStatus === 'failed' ? 'rejected' : 'pending'}">${o.paymentStatus || 'pending'}</span>
+      </td>
       <td class="mono">${fmtPrice(o.amount)}</td>
-      <td><span class="helper">${o.notes || '—'}</span></td>
       <td>
         <select onchange="updateOrderStatus('${o.id}', this.value)" style="background:var(--surface-2);border:1px solid var(--line);color:var(--text);border-radius:6px;padding:4px 8px;font-size:12.5px;">
           ${ORDER_STATUSES.map(s => `<option value="${s}" ${s === o.status ? 'selected' : ''}>${s}</option>`).join('')}
         </select>
       </td>
+      <td class="row-actions" style="flex-direction:column;align-items:stretch;gap:8px;">
+        <div><span class="helper" style="display:block;margin-bottom:4px;">Quote</span>${docSendButtons({ id: o.id, url: o.quoteUrl, number: o.quoteNumber }, 'Quote', o.customerPhone, o.customerEmail, quoteMsg, 'generateOrderQuote')}</div>
+        <div><span class="helper" style="display:block;margin-bottom:4px;">Invoice</span>${docSendButtons({ id: o.id, url: o.invoiceUrl, number: o.invoiceNumber }, 'Invoice', o.customerPhone, o.customerEmail, invoiceMsg, 'generateOrderInvoice')}</div>
+      </td>
       <td class="helper">${new Date(o.createdAt).toLocaleDateString()}</td>
     </tr>
-  `).join('') || `<tr><td colspan="6" class="helper">No orders yet — these appear automatically when you accept an offer or trade-in.</td></tr>`;
+  `;
+  }).join('') || `<tr><td colspan="8" class="helper">No orders yet — these appear automatically from checkout, or when you accept an offer or trade-in.</td></tr>`;
+}
+async function generateOrderQuote(orderId) {
+  try {
+    await api(`/api/admin/orders/${orderId}/quote`, { method: 'POST' });
+    toast('Quote generated');
+    loadAll();
+  } catch (e) { toast(e.message); }
+}
+async function generateOrderInvoice(orderId) {
+  try {
+    await api(`/api/admin/orders/${orderId}/invoice`, { method: 'POST' });
+    toast('Invoice generated');
+    loadAll();
+  } catch (e) { toast(e.message); }
+}
+async function setTracking(id) {
+  const trackingNumber = prompt('Courier Guy tracking / waybill number:');
+  if (trackingNumber === null) return;
+  await api(`/api/admin/orders/${id}`, { method: 'PUT', body: { trackingNumber } });
+  toast('Tracking number saved');
+  loadAll();
 }
 async function updateOrderStatus(id, status) {
   await api(`/api/admin/orders/${id}`, { method: 'PUT', body: { status } });
@@ -281,7 +376,21 @@ async function uploadCsv() {
 function openImageModal(id, label) {
   imgTargetId = id;
   document.getElementById('img-sub').textContent = label;
+  renderImgGallery();
   document.getElementById('img-overlay').classList.add('open');
+}
+function renderImgGallery() {
+  const p = PRODUCTS.find(x => x.id === imgTargetId);
+  const images = (p && p.images) || [];
+  document.getElementById('img-gallery').innerHTML = images.length
+    ? images.map(url => `
+        <div style="position:relative;">
+          <img src="${url}">
+          <button onclick="removeProductImage('${url}')" title="Remove"
+            style="position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;background:var(--danger);color:#fff;border:none;font-size:11px;line-height:1;cursor:pointer;">&times;</button>
+        </div>
+      `).join('')
+    : `<span class="helper">No photos yet.</span>`;
 }
 async function uploadImage() {
   const file = document.getElementById('img-file').files[0];
@@ -289,11 +398,57 @@ async function uploadImage() {
   const fd = new FormData();
   fd.append('image', file);
   try {
-    await fetch(`/api/admin/products/${imgTargetId}/image`, { method: 'POST', body: fd });
-    document.getElementById('img-overlay').classList.remove('open');
-    toast('Photo updated');
+    const res = await fetch(`/api/admin/products/${imgTargetId}/image`, { method: 'POST', body: fd });
+    const updated = await res.json();
+    if (!res.ok) throw new Error(updated.error || 'Upload failed');
+    PRODUCTS = PRODUCTS.map(p => p.id === updated.id ? updated : p);
+    renderImgGallery();
+    renderProducts();
+    document.getElementById('img-file').value = '';
+    toast('Photo added');
+  } catch (e) { toast(e.message); }
+}
+async function removeProductImage(url) {
+  try {
+    const res = await fetch(`/api/admin/products/${imgTargetId}/image`, {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url })
+    });
+    const updated = await res.json();
+    if (!res.ok) throw new Error(updated.error || 'Remove failed');
+    PRODUCTS = PRODUCTS.map(p => p.id === updated.id ? updated : p);
+    renderImgGallery();
+    renderProducts();
+    toast('Photo removed');
+  } catch (e) { toast(e.message); }
+}
+
+async function uploadBulkImages() {
+  const files = document.getElementById('bulk-image-files').files;
+  if (!files.length) return toast('Choose some photos first');
+  const fd = new FormData();
+  [...files].forEach(f => fd.append('images', f));
+  const resultsEl = document.getElementById('bulk-image-results');
+  resultsEl.innerHTML = `<span class="helper">Uploading &amp; matching ${files.length} photo(s)…</span>`;
+  try {
+    const res = await fetch('/api/admin/products/bulk-images', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Upload failed');
+    resultsEl.innerHTML = `
+      <div class="helper" style="margin-bottom:8px;"><b style="color:var(--text)">${data.matched} of ${data.total}</b> matched and added.</div>
+      <table class="table"><thead><tr><th>File</th><th>Result</th></tr></thead><tbody>
+        ${data.results.map(r => `
+          <tr>
+            <td class="mono" style="font-size:12px;">${r.filename}</td>
+            <td>${r.matched ? `<span class="status-pill accepted">${r.product}</span>` : `<span class="status-pill rejected" title="${r.reason || ''}">unmatched</span> <span class="helper">${r.reason || ''}</span>`}</td>
+          </tr>
+        `).join('')}
+      </tbody></table>
+    `;
+    document.getElementById('bulk-image-files').value = '';
     loadAll();
-  } catch (e) { toast('Upload failed'); }
+  } catch (e) {
+    resultsEl.innerHTML = `<span class="helper" style="color:var(--danger)">${e.message}</span>`;
+  }
 }
 
 async function toggleActive(id) {
@@ -321,15 +476,39 @@ async function loadSettings() {
   const cfg = await api('/api/admin/config');
   document.getElementById('s-storename').value = cfg.storeName;
   document.getElementById('s-whatsapp').value = cfg.whatsappNumber;
+  document.getElementById('s-email').value = cfg.contactEmail || '';
   document.getElementById('s-password').value = cfg.adminPassword;
+  renderPaymentProviders(cfg.paymentProviders || []);
 }
 async function saveSettings() {
   await api('/api/admin/config', { method: 'PUT', body: {
     storeName: document.getElementById('s-storename').value,
     whatsappNumber: document.getElementById('s-whatsapp').value,
+    contactEmail: document.getElementById('s-email').value,
     adminPassword: document.getElementById('s-password').value
   }});
   toast('Settings saved');
+}
+
+function renderPaymentProviders(providers) {
+  document.getElementById('payment-providers').innerHTML = providers.map(p => `
+    <div class="field-row" style="align-items:center;margin-bottom:14px;">
+      <div>
+        <div style="font-weight:600;font-size:13.5px;">${p.label}</div>
+        <div class="helper">${p.description}</div>
+        <div class="helper" style="margin-top:2px;">${p.configured ? '✅ API keys detected' : '⚠️ API keys not set in environment variables yet'}</div>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;justify-self:end;">
+        <input type="checkbox" ${p.adminEnabled ? 'checked' : ''} onchange="togglePaymentProvider('${p.key}', this.checked)">
+        <span class="status-pill ${p.live ? 'accepted' : 'pending'}">${p.live ? 'live' : 'off'}</span>
+      </label>
+    </div>
+  `).join('');
+}
+async function togglePaymentProvider(key, enabled) {
+  const cfg = await api(`/api/admin/config/payments/${key}`, { method: 'PUT', body: { enabled } });
+  toast(`${key} ${enabled ? 'enabled' : 'disabled'}`);
+  renderPaymentProviders(cfg.paymentProviders || []);
 }
 
 (async () => {

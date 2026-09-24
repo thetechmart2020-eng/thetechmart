@@ -14,6 +14,7 @@ create table if not exists products (
   color text default '',
   stock integer default 1,
   image_url text,
+  images text[] default '{}', -- full photo gallery; image_url is the cover shot
   active boolean default true,
   created_at timestamptz default now()
 );
@@ -26,8 +27,11 @@ create table if not exists offers (
   amount numeric not null,
   name text not null,
   phone text not null,
+  email text default '',
   message text default '',
   status text default 'pending',
+  quote_number text default '',
+  quote_url text default '',
   created_at timestamptz default now()
 );
 
@@ -51,7 +55,15 @@ create table if not exists config (
   id integer primary key default 1,
   store_name text default 'TheTechMart',
   whatsapp_number text default '27716623565',
-  admin_password text default 'admin123'
+  admin_password text default 'admin123',
+  contact_email text default 'thetechmart2020@gmail.com',
+  -- Which payment gateways are live. All start off — the checkout falls back to
+  -- WhatsApp/EFT handoff until an admin flips one on with real API keys wired up.
+  payment_settings jsonb default '{
+    "yoco": {"enabled": false},
+    "payjustnow": {"enabled": false},
+    "happypay": {"enabled": false}
+  }'::jsonb
 );
 
 insert into config (id, store_name, whatsapp_number, admin_password)
@@ -64,17 +76,31 @@ on conflict (id) do nothing;
 create table if not exists orders (
   id uuid primary key default gen_random_uuid(),
   type text not null, -- 'sale' | 'purchase'
-  source text not null, -- 'offer' | 'tradein' | 'manual'
+  source text not null, -- 'offer' | 'tradein' | 'checkout' | 'manual'
   source_id uuid,
   product_id uuid references products(id) on delete set null,
   customer_name text not null,
   customer_phone text not null,
+  customer_email text default '',
+  delivery_address jsonb default '{}'::jsonb,
+  fulfillment_method text default 'delivery', -- 'delivery' | 'collection'
+  courier text default 'Courier Guy',
+  tracking_number text default '',
+  payment_method text default 'manual', -- 'yoco' | 'payjustnow' | 'happypay' | 'manual'
+  payment_status text default 'pending', -- 'pending' | 'paid' | 'failed' | 'not_required'
+  payment_ref text default '',
+  checkout_channel text default 'whatsapp', -- 'whatsapp' | 'email'
+  quote_number text default '',
+  quote_url text default '',
+  invoice_number text default '',
+  invoice_url text default '',
   amount numeric not null default 0,
   status text default 'new', -- new -> paid -> completed (or cancelled)
   notes text default '',
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
+create index if not exists orders_payment_status_idx on orders (payment_status);
 
 -- Lightweight first-party analytics — no third-party script/cookie needed.
 create table if not exists events (
