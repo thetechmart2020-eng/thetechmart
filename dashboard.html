@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — TheTechMart</title>
+<link rel="icon" type="image/png" href="/img/favicon.png">
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<div class="admin-shell">
+  <aside class="admin-side">
+    <div class="brand"><img class="logo-mark" src="/img/logo.png" alt="TheTechMart"></div>
+    <button class="admin-tab active" data-tab="overview">Overview</button>
+    <button class="admin-tab" data-tab="products">Stock <span class="count" id="c-products"></span></button>
+    <button class="admin-tab" data-tab="offers">Offers <span class="count" id="c-offers"></span></button>
+    <button class="admin-tab" data-tab="tradeins">Trade-ins <span class="count" id="c-tradeins"></span></button>
+    <button class="admin-tab" data-tab="orders">Orders <span class="count" id="c-orders"></span></button>
+    <button class="admin-tab" data-tab="bot">WhatsApp Bot <span class="count" id="c-handoffs"></span></button>
+    <button class="admin-tab" data-tab="analytics">Analytics</button>
+    <button class="admin-tab" data-tab="settings">Settings</button>
+    <div style="flex:1"></div>
+    <button class="admin-tab" onclick="logout()">Sign out</button>
+  </aside>
+
+  <main class="admin-main">
+
+    <section class="admin-panel active" id="panel-overview">
+      <div class="admin-head"><h2>Overview</h2></div>
+      <div class="stat-cards">
+        <div class="stat-card"><div class="num" id="ov-products">0</div><div class="lbl">Devices listed</div></div>
+        <div class="stat-card"><div class="num" id="ov-offers">0</div><div class="lbl">Offers pending</div></div>
+        <div class="stat-card"><div class="num" id="ov-tradeins">0</div><div class="lbl">Trade-ins pending</div></div>
+      </div>
+      <p style="color:var(--text-dim);font-size:13.5px;line-height:1.6;max-width:60ch;">
+        Upload your price list under <b style="color:var(--text)">Stock</b> to populate the shop. New offers and sell/trade-in
+        requests land here in real time — accept or reject each one, then confirm the outcome with the customer on WhatsApp.
+      </p>
+    </section>
+
+    <section class="admin-panel" id="panel-products">
+      <div class="admin-head">
+        <h2>Stock</h2>
+      </div>
+      <div class="upload-box">
+        <div><b>Upload your price list (CSV)</b></div>
+        <div class="helper">Columns: brand, model, price, category, condition, storage, color, stock, imageUrl (optional). Category can be Phones, Accessories, Tablets, Audio, or anything else you want — leave blank and it defaults to Phones. Re-uploading updates matching rows instead of duplicating them.</div>
+        <input type="file" id="csv-file" accept=".csv">
+        <div style="margin-top:12px;"><button class="btn btn-primary btn-sm" onclick="uploadCsv()">Upload &amp; sync stock</button></div>
+      </div>
+      <div class="upload-box">
+        <div><b>Bulk photo upload</b></div>
+        <div class="helper">Select as many photos as you like at once. Name each file to match the device — e.g. <span class="mono">apple-iphone-13-128gb-blue.jpg</span> — and it's matched and added to that device's gallery automatically. Spacing, capitalization and dashes vs. underscores don't matter; if the brand+model alone is unique (e.g. <span class="mono">samsung-s22-ultra.jpg</span>) that's enough too.</div>
+        <input type="file" id="bulk-image-files" accept="image/*" multiple>
+        <div style="margin-top:12px;"><button class="btn btn-primary btn-sm" onclick="uploadBulkImages()">Upload &amp; match photos</button></div>
+        <div id="bulk-image-results" style="margin-top:14px;"></div>
+      </div>
+      <table class="table" id="products-table">
+        <thead><tr><th></th><th>Device</th><th>Category</th><th>Condition</th><th>Price</th><th>Stock</th><th>Status</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="admin-panel" id="panel-offers">
+      <div class="admin-head"><h2>Offers</h2></div>
+      <table class="table" id="offers-table">
+        <thead><tr><th>Device</th><th>List</th><th>Offer</th><th>From</th><th>Status</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="admin-panel" id="panel-tradeins">
+      <div class="admin-head"><h2>Sell &amp; trade-in requests</h2></div>
+      <table class="table" id="tradeins-table">
+        <thead><tr><th>Photos</th><th>Device</th><th>Type</th><th>Asking</th><th>From</th><th>Status</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="admin-panel" id="panel-orders">
+      <div class="admin-head"><h2>Orders</h2></div>
+      <p class="helper" style="margin-bottom:16px;">Created automatically when a customer checks out, or when you accept an offer (sale) or a trade-in (purchase). Move each through its pipeline as it happens in real life.</p>
+      <table class="table" id="orders-table">
+        <thead><tr><th>Type</th><th>Customer</th><th>Delivery</th><th>Payment</th><th>Amount</th><th>Status</th><th>Documents</th><th>Date</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="admin-panel" id="panel-bot">
+      <div class="admin-head"><h2>WhatsApp Bot</h2></div>
+
+      <div class="form-card" style="max-width:620px;margin-bottom:20px;">
+        <div class="field-row" style="align-items:center;">
+          <div>
+            <div style="font-weight:600;font-size:13.5px;">Bot enabled</div>
+            <div class="helper" id="bot-status-line">Checking…</div>
+          </div>
+          <label style="display:flex;align-items:center;gap:8px;justify-self:end;">
+            <input type="checkbox" id="bot-enabled" onchange="toggleBot(this.checked)">
+            <span>On / off</span>
+          </label>
+        </div>
+        <div class="field-row" style="margin-top:14px;">
+          <div class="field">
+            <label>Max discount below R<span id="bot-threshold-lbl">5000</span></label>
+            <input type="number" id="bot-low-discount" placeholder="300">
+          </div>
+          <div class="field">
+            <label>Max discount at/above that price</label>
+            <input type="number" id="bot-high-discount" placeholder="500">
+          </div>
+        </div>
+        <div class="field">
+          <label>Price threshold (Rand)</label>
+          <input type="number" id="bot-threshold" placeholder="5000">
+        </div>
+        <div class="helper" style="margin-bottom:10px;">The bot will never come down more than this off a device's list price on its own — anything a customer wants beyond it gets handed straight to you. A discount the bot accepts automatically marks that sale as reduced warranty/perks.</div>
+        <button class="btn btn-primary btn-sm" onclick="saveBotSettings()">Save negotiation limits</button>
+        <div class="helper" style="margin-top:10px;" id="bot-config-line"></div>
+      </div>
+
+      <div class="bot-split">
+        <div class="bot-convo-list">
+          <div class="field-row" style="align-items:center;margin-bottom:10px;">
+            <b style="font-size:13.5px;">Conversations</b>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text-dim);">
+              <input type="checkbox" id="bot-handoff-filter" onchange="loadConversations()"> Needs attention only
+            </label>
+          </div>
+          <div id="bot-convo-items"></div>
+        </div>
+        <div class="bot-chat-view">
+          <div id="bot-chat-empty" class="empty">Select a conversation to view the chat.</div>
+          <div id="bot-chat-active" style="display:none;">
+            <div class="bot-chat-head">
+              <div>
+                <b id="bot-chat-name"></b>
+                <div class="helper" id="bot-chat-phone"></div>
+              </div>
+              <div style="display:flex;gap:8px;">
+                <button class="btn btn-ghost btn-sm" id="bot-chat-pause-btn" onclick="togglePause()"></button>
+                <button class="btn btn-ghost btn-sm" id="bot-chat-resolve-btn" onclick="resolveHandoff()" style="display:none;">Hand back to bot</button>
+              </div>
+            </div>
+            <div id="bot-chat-messages" class="bot-chat-messages"></div>
+            <div class="bot-chat-input">
+              <input type="text" id="bot-chat-text" placeholder="Message this customer directly…">
+              <button class="btn btn-primary btn-sm" onclick="sendAdminMessage()">Send</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="admin-panel" id="panel-analytics">
+      <div class="admin-head"><h2>Analytics <span class="helper">(last 30 days)</span></h2></div>
+      <div class="stat-cards">
+        <div class="stat-card"><div class="num" id="an-pageviews">0</div><div class="lbl">Page views</div></div>
+        <div class="stat-card"><div class="num" id="an-productviews">0</div><div class="lbl">Product views</div></div>
+        <div class="stat-card"><div class="num" id="an-offers">0</div><div class="lbl">Offers submitted</div></div>
+        <div class="stat-card"><div class="num" id="an-tradeins">0</div><div class="lbl">Sell/trade submissions</div></div>
+      </div>
+      <h3 style="font-size:15px;margin-bottom:12px;">Most-viewed devices</h3>
+      <table class="table" id="top-products-table">
+        <thead><tr><th>Device</th><th>Views</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="admin-panel" id="panel-settings">
+      <div class="admin-head"><h2>Settings</h2></div>
+      <div class="form-card" style="max-width:460px;">
+        <div class="field">
+          <label>Store name</label>
+          <input type="text" id="s-storename">
+        </div>
+        <div class="field">
+          <label>WhatsApp number (country code + number, digits only)</label>
+          <input type="text" id="s-whatsapp" placeholder="e.g. 27821234567">
+        </div>
+        <div class="field">
+          <label>Contact email (used for "web to email" offers/checkout)</label>
+          <input type="email" id="s-email" placeholder="thetechmart2020@gmail.com">
+        </div>
+        <div class="field">
+          <label>Admin password</label>
+          <input type="text" id="s-password">
+        </div>
+        <button class="btn btn-primary" onclick="saveSettings()">Save settings</button>
+      </div>
+
+      <h3 style="font-size:15px;margin:28px 0 12px;">Payment gateways</h3>
+      <p class="helper" style="margin-bottom:14px;max-width:60ch;">The checkout page is wired up for these already. Flip one on once you've added its live API keys to your deployment's environment variables — until then, or if it's off, customers checking out are handed off to WhatsApp or email to arrange payment, same as today.</p>
+      <div class="form-card" style="max-width:460px;">
+        <div id="payment-providers"></div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- image upload modal -->
+<div class="overlay" id="img-overlay">
+  <div class="modal">
+    <div class="modal-inner">
+      <button class="modal-close" onclick="document.getElementById('img-overlay').classList.remove('open')">&times;</button>
+      <h3>Product photos</h3>
+      <p class="sub" id="img-sub"></p>
+      <div class="thumb-row" id="img-gallery" style="margin-bottom:14px;"></div>
+      <input type="file" id="img-file" accept="image/*">
+      <button class="btn btn-primary btn-block" style="margin-top:14px;" onclick="uploadImage()">Add photo</button>
+    </div>
+  </div>
+</div>
+
+<script src="/js/common.js"></script>
+<script>
+let PRODUCTS = [], OFFERS = [], TRADEINS = [], ORDERS = [];
+let imgTargetId = null;
+
+async function checkAuth() {
+  const { isAdmin } = await api('/api/admin/session');
+  if (!isAdmin) location.href = '/admin';
+}
+
+document.querySelectorAll('.admin-tab[data-tab]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.admin-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.admin-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'analytics') loadAnalytics().catch(() => toast('Analytics not set up yet — run the migration SQL in Supabase'));
+    if (btn.dataset.tab === 'bot') loadConversations().catch(() => toast('WhatsApp bot not set up yet — run migration_007 in Supabase'));
+  });
+});
+
+async function logout() {
+  await api('/api/admin/logout', { method: 'POST' });
+  location.href = '/admin';
+}
+
+async function loadAll() {
+  [PRODUCTS, OFFERS, TRADEINS] = await Promise.all([
+    api('/api/admin/products'), api('/api/admin/offers'), api('/api/admin/tradeins')
+  ]);
+  ORDERS = await api('/api/admin/orders').catch(() => []);
+  loadConversations().catch(() => {}); // badge count only — bot tab shows the real error if migration_007 hasn't run
+  renderProducts(); renderOffers(); renderTradeins(); renderOrders(); renderCounts();
+}
+
+function renderCounts() {
+  document.getElementById('c-products').textContent = PRODUCTS.length;
+  const pendingOffers = OFFERS.filter(o => o.status === 'pending').length;
+  const pendingTrades = TRADEINS.filter(t => t.status === 'pending').length;
+  document.getElementById('c-offers').textContent = pendingOffers;
+  document.getElementById('c-tradeins').textContent = pendingTrades;
+  document.getElementById('c-orders').textContent = ORDERS.filter(o => o.status !== 'completed' && o.status !== 'cancelled').length;
+  document.getElementById('ov-products').textContent = PRODUCTS.length;
+  document.getElementById('ov-offers').textContent = pendingOffers;
+  document.getElementById('ov-tradeins').textContent = pendingTrades;
+}
+
+function renderProducts() {
+  document.querySelector('#products-table tbody').innerHTML = PRODUCTS.map(p => `
+    <tr>
+      <td>${p.imageUrl ? `<img class="thumb-sm" src="${p.imageUrl}">` : `<div class="thumb-sm"></div>`}</td>
+      <td><b>${p.brand} ${p.model}</b><br><span class="helper">${p.storage || ''} ${p.color || ''}</span></td>
+      <td>${p.category || 'Phones'}</td>
+      <td>${p.condition}</td>
+      <td class="mono">${fmtPrice(p.price)}</td>
+      <td>${p.stock}</td>
+      <td>
+        <span class="status-pill ${p.active !== false ? 'accepted' : 'rejected'}">${p.active !== false ? 'live' : 'hidden'}</span>
+        ${p.stock < 1 ? '<span class="status-pill rejected" style="margin-left:4px;">pre-order</span>' : ''}
+      </td>
+      <td class="row-actions">
+        <button class="btn btn-ghost btn-sm" onclick="openImageModal('${p.id}','${p.brand} ${p.model}')">Photos${p.images && p.images.length ? ` (${p.images.length})` : ''}</button>
+        <button class="btn btn-ghost btn-sm" onclick="toggleActive('${p.id}')">${p.active !== false ? 'Hide' : 'Unhide'}</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteProduct('${p.id}')">Delete</button>
+      </td>
+    </tr>
+  `).join('') || `<tr><td colspan="8" class="helper">No stock yet — upload a CSV above to get started.</td></tr>`;
+}
+
+function waLinkClient(phone, text) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  const intl = digits.startsWith('0') ? '27' + digits.slice(1) : digits;
+  return `https://wa.me/${intl}?text=${encodeURIComponent(text)}`;
+}
+function mailtoLinkClient(email, subject, body) {
+  return `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
+function docSendButtons(doc, label, phone, email, message, genFn) {
+  if (!doc || !doc.url) return `<button class="btn btn-ghost btn-sm" onclick="${genFn}('${doc.id}')">Generate ${label.toLowerCase()}</button>`;
+  return `
+    <a class="btn btn-ghost btn-sm" href="${waLinkClient(phone, message)}" target="_blank">WhatsApp</a>
+    ${email ? `<a class="btn btn-ghost btn-sm" href="${mailtoLinkClient(email, `Your TheTechMart ${label.toLowerCase()} (${doc.number})`, message)}">Email</a>` : ''}
+    <a class="btn btn-ghost btn-sm" href="${doc.url}" target="_blank">View ${doc.number}</a>
+    <button class="btn btn-ghost btn-sm" onclick="${genFn}('${doc.id}')">Regenerate</button>
+  `;
+}
+
+function renderOffers() {
+  document.querySelector('#offers-table tbody').innerHTML = OFFERS.map(o => {
+    const message = `Hi ${o.name}, here's your quote from TheTechMart (ref ${o.quoteNumber}):\n${o.quoteUrl}\n\nDevice: ${o.productName}\nYour offer: R${o.amount}\n\nLet us know if you'd like to go ahead!`;
+    return `
+    <tr>
+      <td>${o.productName}</td>
+      <td class="mono">${fmtPrice(o.listPrice)}</td>
+      <td class="mono" style="color:var(--accent)">${fmtPrice(o.amount)}</td>
+      <td>${o.name}<br><span class="helper">${o.phone}${o.email ? ' · ' + o.email : ''}</span></td>
+      <td><span class="status-pill ${o.status}">${o.status}</span></td>
+      <td class="row-actions" style="flex-wrap:wrap;">
+        ${o.status === 'pending' ? `
+          <button class="btn btn-accept btn-sm" onclick="offerAction('${o.id}','accept')">Accept</button>
+          <button class="btn btn-danger btn-sm" onclick="offerAction('${o.id}','reject')">Reject</button>
+        ` : ''}
+        ${docSendButtons({ id: o.id, url: o.quoteUrl, number: o.quoteNumber }, 'Quote', o.phone, o.email, message, 'generateOfferQuote')}
+      </td>
+    </tr>
+  `;
+  }).join('') || `<tr><td colspan="6" class="helper">No offers yet.</td></tr>`;
+}
+async function generateOfferQuote(offerId) {
+  try {
+    await api(`/api/admin/offers/${offerId}/quote`, { method: 'POST' });
+    toast('Quote generated');
+    loadAll();
+  } catch (e) { toast(e.message); }
+}
+
+function renderTradeins() {
+  document.querySelector('#tradeins-table tbody').innerHTML = TRADEINS.map(t => `
+    <tr>
+      <td><div class="photo-strip">${(t.photos||[]).slice(0,3).map(p => `<img src="${p}">`).join('') || '<span class="helper">none</span>'}</div></td>
+      <td><b>${t.brand} ${t.model}</b><br><span class="helper">${t.storage || ''} · ${t.condition || ''}</span></td>
+      <td>${t.type}</td>
+      <td class="mono">${t.askingPrice ? fmtPrice(t.askingPrice) : '—'}</td>
+      <td>${t.name}<br><span class="helper">${t.phone}</span></td>
+      <td><span class="status-pill ${t.status}">${t.status}</span></td>
+      <td class="row-actions">
+        ${t.status === 'pending' ? `
+          <button class="btn btn-accept btn-sm" onclick="tradeinAction('${t.id}','accept')">Accept</button>
+          <button class="btn btn-danger btn-sm" onclick="tradeinAction('${t.id}','reject')">Reject</button>
+        ` : ''}
+      </td>
+    </tr>
+  `).join('') || `<tr><td colspan="7" class="helper">No sell/trade-in submissions yet.</td></tr>`;
+}
+
+const ORDER_STATUSES = ['new', 'paid', 'completed', 'cancelled'];
+function fmtAddress(a) {
+  if (!a || !a.line1) return '';
+  return [a.line1, a.line2, a.city, a.postalCode, a.province].filter(Boolean).join(', ');
+}
+function renderOrders() {
+  document.querySelector('#orders-table tbody').innerHTML = ORDERS.map(o => {
+    const line = product => product ? `${product.brand} ${product.model}` : (o.notes || 'Device');
+    const quoteMsg = `Hi ${o.customerName}, here's your quote from TheTechMart (ref ${o.quoteNumber}):\n${o.quoteUrl}\n\nTotal: R${o.amount}\n\nLet us know if you'd like to go ahead!`;
+    const invoiceMsg = `Hi ${o.customerName}, here's your invoice from TheTechMart (ref ${o.invoiceNumber}):\n${o.invoiceUrl}\n\nTotal: R${o.amount}\nStatus: ${o.paymentStatus === 'paid' ? 'PAID' : o.paymentStatus}\n\nThanks for your business!`;
+    return `
+    <tr>
+      <td><span class="status-pill ${o.type === 'sale' ? 'accepted' : 'pending'}">${o.type}</span></td>
+      <td>${o.customerName}<br><span class="helper">${o.customerPhone}${o.customerEmail ? ' · ' + o.customerEmail : ''}</span></td>
+      <td>
+        ${o.fulfillmentMethod === 'collection'
+          ? `<span class="helper">In-store collection</span>`
+          : `<span class="helper">${o.courier || 'Courier Guy'}${fmtAddress(o.deliveryAddress) ? '<br>' + fmtAddress(o.deliveryAddress) : ''}</span>`}
+        ${o.trackingNumber ? `<div class="helper mono" style="margin-top:4px;">Tracking: ${o.trackingNumber}</div>` : ''}
+        <button class="btn btn-ghost btn-sm" style="margin-top:6px;" onclick="setTracking('${o.id}')">${o.trackingNumber ? 'Edit' : 'Add'} tracking #</button>
+      </td>
+      <td>
+        <span class="helper">${o.paymentMethod || 'manual'}</span><br>
+        <span class="status-pill ${o.paymentStatus === 'paid' ? 'accepted' : o.paymentStatus === 'failed' ? 'rejected' : 'pending'}">${o.paymentStatus || 'pending'}</span>
+      </td>
+      <td class="mono">${fmtPrice(o.amount)}</td>
+      <td>
+        <select onchange="updateOrderStatus('${o.id}', this.value)" style="background:var(--surface-2);border:1px solid var(--line);color:var(--text);border-radius:6px;padding:4px 8px;font-size:12.5px;">
+          ${ORDER_STATUSES.map(s => `<option value="${s}" ${s === o.status ? 'selected' : ''}>${s}</option>`).join('')}
+        </select>
+      </td>
+      <td class="row-actions" style="flex-direction:column;align-items:stretch;gap:8px;">
+        <div><span class="helper" style="display:block;margin-bottom:4px;">Quote</span>${docSendButtons({ id: o.id, url: o.quoteUrl, number: o.quoteNumber }, 'Quote', o.customerPhone, o.customerEmail, quoteMsg, 'generateOrderQuote')}</div>
+        <div><span class="helper" style="display:block;margin-bottom:4px;">Invoice</span>${docSendButtons({ id: o.id, url: o.invoiceUrl, number: o.invoiceNumber }, 'Invoice', o.customerPhone, o.customerEmail, invoiceMsg, 'generateOrderInvoice')}</div>
+      </td>
+      <td class="helper">${new Date(o.createdAt).toLocaleDateString()}</td>
+    </tr>
+  `;
+  }).join('') || `<tr><td colspan="8" class="helper">No orders yet — these appear automatically from checkout, or when you accept an offer or trade-in.</td></tr>`;
+}
+async function generateOrderQuote(orderId) {
+  try {
+    await api(`/api/admin/orders/${orderId}/quote`, { method: 'POST' });
+    toast('Quote generated');
+    loadAll();
+  } catch (e) { toast(e.message); }
+}
+async function generateOrderInvoice(orderId) {
+  try {
+    await api(`/api/admin/orders/${orderId}/invoice`, { method: 'POST' });
+    toast('Invoice generated');
+    loadAll();
+  } catch (e) { toast(e.message); }
+}
+async function setTracking(id) {
+  const trackingNumber = prompt('Courier Guy tracking / waybill number:');
+  if (trackingNumber === null) return;
+  await api(`/api/admin/orders/${id}`, { method: 'PUT', body: { trackingNumber } });
+  toast('Tracking number saved');
+  loadAll();
+}
+async function updateOrderStatus(id, status) {
+  await api(`/api/admin/orders/${id}`, { method: 'PUT', body: { status } });
+  toast('Order updated');
+  loadAll();
+}
+
+async function loadAnalytics() {
+  const a = await api('/api/admin/analytics');
+  document.getElementById('an-pageviews').textContent = a.pageViews;
+  document.getElementById('an-productviews').textContent = a.productViews;
+  document.getElementById('an-offers').textContent = a.offersSubmitted;
+  document.getElementById('an-tradeins').textContent = a.tradeinsSubmitted;
+  document.querySelector('#top-products-table tbody').innerHTML = a.topProducts.map(p => `
+    <tr><td>${p.brand} ${p.model}</td><td class="mono">${p.views}</td></tr>
+  `).join('') || `<tr><td colspan="2" class="helper">No product views yet.</td></tr>`;
+}
+
+async function uploadCsv() {
+  const file = document.getElementById('csv-file').files[0];
+  if (!file) return toast('Choose a CSV file first');
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    const res = await fetch('/api/admin/upload-csv', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    toast(`Synced: ${data.added} added, ${data.updated} updated`);
+    loadAll();
+  } catch (e) { toast(e.message); }
+}
+
+function openImageModal(id, label) {
+  imgTargetId = id;
+  document.getElementById('img-sub').textContent = label;
+  renderImgGallery();
+  document.getElementById('img-overlay').classList.add('open');
+}
+function renderImgGallery() {
+  const p = PRODUCTS.find(x => x.id === imgTargetId);
+  const images = (p && p.images) || [];
+  document.getElementById('img-gallery').innerHTML = images.length
+    ? images.map(url => `
+        <div style="position:relative;">
+          <img src="${url}">
+          <button onclick="removeProductImage('${url}')" title="Remove"
+            style="position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;background:var(--danger);color:#fff;border:none;font-size:11px;line-height:1;cursor:pointer;">&times;</button>
+        </div>
+      `).join('')
+    : `<span class="helper">No photos yet.</span>`;
+}
+async function uploadImage() {
+  const file = document.getElementById('img-file').files[0];
+  if (!file) return toast('Choose an image first');
+  const fd = new FormData();
+  fd.append('image', file);
+  try {
+    const res = await fetch(`/api/admin/products/${imgTargetId}/image`, { method: 'POST', body: fd });
+    const updated = await res.json();
+    if (!res.ok) throw new Error(updated.error || 'Upload failed');
+    PRODUCTS = PRODUCTS.map(p => p.id === updated.id ? updated : p);
+    renderImgGallery();
+    renderProducts();
+    document.getElementById('img-file').value = '';
+    toast('Photo added');
+  } catch (e) { toast(e.message); }
+}
+async function removeProductImage(url) {
+  try {
+    const res = await fetch(`/api/admin/products/${imgTargetId}/image`, {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url })
+    });
+    const updated = await res.json();
+    if (!res.ok) throw new Error(updated.error || 'Remove failed');
+    PRODUCTS = PRODUCTS.map(p => p.id === updated.id ? updated : p);
+    renderImgGallery();
+    renderProducts();
+    toast('Photo removed');
+  } catch (e) { toast(e.message); }
+}
+
+async function uploadBulkImages() {
+  const files = document.getElementById('bulk-image-files').files;
+  if (!files.length) return toast('Choose some photos first');
+  const fd = new FormData();
+  [...files].forEach(f => fd.append('images', f));
+  const resultsEl = document.getElementById('bulk-image-results');
+  resultsEl.innerHTML = `<span class="helper">Uploading &amp; matching ${files.length} photo(s)…</span>`;
+  try {
+    const res = await fetch('/api/admin/products/bulk-images', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Upload failed');
+    resultsEl.innerHTML = `
+      <div class="helper" style="margin-bottom:8px;"><b style="color:var(--text)">${data.matched} of ${data.total}</b> matched and added.</div>
+      <table class="table"><thead><tr><th>File</th><th>Result</th></tr></thead><tbody>
+        ${data.results.map(r => `
+          <tr>
+            <td class="mono" style="font-size:12px;">${r.filename}</td>
+            <td>${r.matched ? `<span class="status-pill accepted">${r.product}</span>` : `<span class="status-pill rejected" title="${r.reason || ''}">unmatched</span> <span class="helper">${r.reason || ''}</span>`}</td>
+          </tr>
+        `).join('')}
+      </tbody></table>
+    `;
+    document.getElementById('bulk-image-files').value = '';
+    loadAll();
+  } catch (e) {
+    resultsEl.innerHTML = `<span class="helper" style="color:var(--danger)">${e.message}</span>`;
+  }
+}
+
+async function toggleActive(id) {
+  const p = PRODUCTS.find(x => x.id === id);
+  await api(`/api/admin/products/${id}`, { method: 'PUT', body: { active: p.active === false } });
+  loadAll();
+}
+async function deleteProduct(id) {
+  if (!confirm('Delete this listing permanently?')) return;
+  await api(`/api/admin/products/${id}`, { method: 'DELETE' });
+  loadAll();
+}
+async function offerAction(id, action) {
+  await api(`/api/admin/offers/${id}/${action}`, { method: 'POST' });
+  toast(`Offer ${action}ed — confirm with the customer on WhatsApp`);
+  loadAll();
+}
+async function tradeinAction(id, action) {
+  await api(`/api/admin/tradeins/${id}/${action}`, { method: 'POST' });
+  toast(`Submission ${action}ed — confirm with the customer on WhatsApp`);
+  loadAll();
+}
+
+async function loadSettings() {
+  const cfg = await api('/api/admin/config');
+  document.getElementById('s-storename').value = cfg.storeName;
+  document.getElementById('s-whatsapp').value = cfg.whatsappNumber;
+  document.getElementById('s-email').value = cfg.contactEmail || '';
+  document.getElementById('s-password').value = cfg.adminPassword;
+  renderPaymentProviders(cfg.paymentProviders || []);
+
+  const bs = cfg.botSettings || {};
+  document.getElementById('bot-enabled').checked = !!bs.enabled;
+  document.getElementById('bot-low-discount').value = bs.lowDiscount ?? 300;
+  document.getElementById('bot-high-discount').value = bs.highDiscount ?? 500;
+  document.getElementById('bot-threshold').value = bs.highDiscountThreshold ?? 5000;
+  document.getElementById('bot-threshold-lbl').textContent = bs.highDiscountThreshold ?? 5000;
+  updateBotStatusLine(bs);
+}
+function updateBotStatusLine(bs) {
+  document.getElementById('bot-status-line').textContent = bs.enabled
+    ? 'Live — replying to customers on WhatsApp automatically.'
+    : 'Off — customers get no automatic replies until you turn this on and connect WhatsApp (see README).';
+}
+async function saveSettings() {
+  await api('/api/admin/config', { method: 'PUT', body: {
+    storeName: document.getElementById('s-storename').value,
+    whatsappNumber: document.getElementById('s-whatsapp').value,
+    contactEmail: document.getElementById('s-email').value,
+    adminPassword: document.getElementById('s-password').value
+  }});
+  toast('Settings saved');
+}
+
+function renderPaymentProviders(providers) {
+  document.getElementById('payment-providers').innerHTML = providers.map(p => `
+    <div class="field-row" style="align-items:center;margin-bottom:14px;">
+      <div>
+        <div style="font-weight:600;font-size:13.5px;">${p.label}</div>
+        <div class="helper">${p.description}</div>
+        <div class="helper" style="margin-top:2px;">${p.configured ? '✅ API keys detected' : '⚠️ API keys not set in environment variables yet'}</div>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;justify-self:end;">
+        <input type="checkbox" ${p.adminEnabled ? 'checked' : ''} onchange="togglePaymentProvider('${p.key}', this.checked)">
+        <span class="status-pill ${p.live ? 'accepted' : 'pending'}">${p.live ? 'live' : 'off'}</span>
+      </label>
+    </div>
+  `).join('');
+}
+async function togglePaymentProvider(key, enabled) {
+  const cfg = await api(`/api/admin/config/payments/${key}`, { method: 'PUT', body: { enabled } });
+  toast(`${key} ${enabled ? 'enabled' : 'disabled'}`);
+  renderPaymentProviders(cfg.paymentProviders || []);
+}
+
+// ---------- WhatsApp Bot ----------
+let BOT_CONVOS = [], activeConvoId = null, botChatPoll = null;
+
+async function toggleBot(enabled) {
+  const cfg = await api('/api/admin/config', { method: 'PUT', body: {
+    botSettings: {
+      enabled,
+      lowDiscount: Number(document.getElementById('bot-low-discount').value) || 300,
+      highDiscount: Number(document.getElementById('bot-high-discount').value) || 500,
+      highDiscountThreshold: Number(document.getElementById('bot-threshold').value) || 5000
+    }
+  }});
+  updateBotStatusLine(cfg.botSettings || {});
+  toast(enabled ? 'Bot switched on' : 'Bot switched off');
+}
+async function saveBotSettings() {
+  const bs = {
+    enabled: document.getElementById('bot-enabled').checked,
+    lowDiscount: Number(document.getElementById('bot-low-discount').value) || 300,
+    highDiscount: Number(document.getElementById('bot-high-discount').value) || 500,
+    highDiscountThreshold: Number(document.getElementById('bot-threshold').value) || 5000
+  };
+  await api('/api/admin/config', { method: 'PUT', body: { botSettings: bs } });
+  document.getElementById('bot-threshold-lbl').textContent = bs.highDiscountThreshold;
+  document.getElementById('bot-config-line').textContent = `Saved — up to R${bs.lowDiscount} off below R${bs.highDiscountThreshold}, up to R${bs.highDiscount} off at or above it.`;
+  toast('Negotiation limits saved');
+}
+
+async function loadConversations() {
+  const handoffOnly = document.getElementById('bot-handoff-filter').checked;
+  BOT_CONVOS = await api('/api/admin/bot/conversations' + (handoffOnly ? '?handoff=true' : ''));
+  document.getElementById('c-handoffs').textContent = BOT_CONVOS.filter(c => c.handoff).length || '';
+  document.getElementById('bot-convo-items').innerHTML = BOT_CONVOS.length ? BOT_CONVOS.map(c => `
+    <div class="bot-convo-item ${c.id === activeConvoId ? 'active' : ''}" onclick="openConversation('${c.id}')">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <b style="font-size:13px;">${c.customerName || c.phone}</b>
+        ${c.handoff ? '<span class="status-pill pending">needs you</span>' : ''}
+      </div>
+      <div class="helper">${c.phone} · ${c.stage.replace(/_/g, ' ')}</div>
+    </div>
+  `).join('') : '<div class="empty" style="padding:20px 0;">No conversations yet.</div>';
+}
+
+async function openConversation(id) {
+  activeConvoId = id;
+  await loadConversations();
+  const convo = BOT_CONVOS.find(c => c.id === id);
+  if (!convo) return;
+  document.getElementById('bot-chat-empty').style.display = 'none';
+  document.getElementById('bot-chat-active').style.display = 'block';
+  document.getElementById('bot-chat-name').textContent = convo.customerName || 'WhatsApp customer';
+  document.getElementById('bot-chat-phone').textContent = convo.phone;
+  const pauseBtn = document.getElementById('bot-chat-pause-btn');
+  pauseBtn.textContent = convo.paused ? 'Unmute bot' : 'Mute bot';
+  document.getElementById('bot-chat-resolve-btn').style.display = convo.handoff ? 'inline-block' : 'none';
+  await loadMessages(id);
+  clearInterval(botChatPoll);
+  botChatPoll = setInterval(() => { if (activeConvoId === id) loadMessages(id); }, 8000);
+}
+
+async function loadMessages(id) {
+  const messages = await api(`/api/admin/bot/conversations/${id}/messages`);
+  const el = document.getElementById('bot-chat-messages');
+  const wasAtBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 20;
+  el.innerHTML = messages.map(m => `
+    <div class="bot-msg ${m.direction === 'in' ? 'in' : 'out'}">
+      <div class="bot-msg-body">${(m.body || '').replace(/</g, '&lt;')}</div>
+      <div class="bot-msg-time">${new Date(m.createdAt).toLocaleString('en-ZA', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })}</div>
+    </div>
+  `).join('') || '<div class="empty">No messages yet.</div>';
+  if (wasAtBottom) el.scrollTop = el.scrollHeight;
+}
+
+async function sendAdminMessage() {
+  const input = document.getElementById('bot-chat-text');
+  const message = input.value.trim();
+  if (!message || !activeConvoId) return;
+  input.value = '';
+  await api(`/api/admin/bot/conversations/${activeConvoId}/send`, { method: 'POST', body: { message } });
+  await loadMessages(activeConvoId);
+}
+
+async function togglePause() {
+  const convo = BOT_CONVOS.find(c => c.id === activeConvoId);
+  if (!convo) return;
+  await api(`/api/admin/bot/conversations/${activeConvoId}/pause`, { method: 'POST', body: { paused: !convo.paused } });
+  toast(convo.paused ? 'Bot unmuted for this customer' : 'Bot muted — only you will reply now');
+  await openConversation(activeConvoId);
+}
+
+async function resolveHandoff() {
+  await api(`/api/admin/bot/conversations/${activeConvoId}/resolve`, { method: 'POST' });
+  toast('Handed back to the bot — it will greet the customer fresh next message');
+  await openConversation(activeConvoId);
+}
+
+(async () => {
+  await checkAuth();
+  await loadAll();
+  await loadSettings();
+})();
+</script>
+</body>
+</html>

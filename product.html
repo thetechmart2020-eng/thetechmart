@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Device — TheTechMart</title>
+<link rel="icon" type="image/png" href="/img/favicon.png">
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="wrap">
+    <a href="/" class="brand"><img class="logo-mark" src="/img/logo.png" alt="TheTechMart"></a>
+    <div class="nav-links">
+      <a href="/#shop">Shop</a>
+      <a href="/sell">Sell / Trade-in</a>
+    </div>
+    <a href="/sell" class="nav-cta">Get a quote</a>
+  </div>
+</nav>
+
+<div class="wrap">
+  <div class="pd-grid" id="content">
+    <div class="empty">Loading…</div>
+  </div>
+</div>
+
+<!-- Offer modal -->
+<div class="overlay" id="offer-overlay">
+  <div class="modal">
+    <div class="modal-inner">
+      <button class="modal-close" onclick="closeOffer()">&times;</button>
+      <h3>Make an offer</h3>
+      <p class="sub" id="offer-sub"></p>
+      <form id="offer-form">
+        <div class="field">
+          <label>Your offer (ZAR)</label>
+          <input type="number" name="amount" required min="1" placeholder="e.g. 7500">
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Your name</label>
+            <input type="text" name="name" required>
+          </div>
+          <div class="field">
+            <label>WhatsApp number</label>
+            <input type="tel" name="phone" required placeholder="e.g. 0821234567">
+          </div>
+        </div>
+        <div class="field">
+          <label>Email (optional — so we can send you a quote)</label>
+          <input type="email" name="email" placeholder="you@example.com">
+        </div>
+        <div class="field">
+          <label>Note (optional)</label>
+          <textarea name="message" placeholder="Anything we should know?"></textarea>
+        </div>
+        <div class="checkout-actions">
+          <button type="submit" data-channel="whatsapp" class="btn btn-primary btn-block">Send offer via WhatsApp</button>
+          <button type="submit" data-channel="email" class="btn btn-ghost btn-block" style="margin-top:10px;">Send offer via Email</button>
+        </div>
+        <p class="helper">We'll save your offer and open WhatsApp or your email app with it pre-filled — just hit send from there. We reply directly to accept, reject, or counter.</p>
+      </form>
+    </div>
+  </div>
+</div>
+
+<footer class="footer">
+  <div class="wrap">
+    <span>© TheTechMart — "the #1 electronics market"</span>
+    <div class="footer-links">
+      <a href="https://wa.me/27716623565" target="_blank" rel="noopener">WhatsApp</a>
+      <a href="mailto:thetechmart2020@gmail.com">Email</a>
+      <a href="https://instagram.com/the_tech_mart" target="_blank" rel="noopener">Instagram</a>
+      <a href="https://web.facebook.com/thulani.molefi/?_rdc=1&_rdr#" target="_blank" rel="noopener">Facebook</a>
+      <a href="https://x.com/TheTechMart3" target="_blank" rel="noopener">X</a>
+    </div>
+  </div>
+</footer>
+
+<script src="/js/common.js"></script>
+<script>
+const id = new URLSearchParams(location.search).get('id');
+let product = null;
+
+async function load() {
+  try {
+    product = await api('/api/products/' + id);
+  } catch (e) {
+    document.getElementById('content').innerHTML = `<div class="empty" style="grid-column:1/-1">Couldn't find that device. <a href="/" style="color:var(--accent)">Back to shop</a></div>`;
+    return;
+  }
+  const gallery = (product.images && product.images.length) ? product.images : (product.imageUrl ? [product.imageUrl] : []);
+  // We source from a supplier network, so running out of on-hand units doesn't
+  // mean we can't sell it — it just becomes a pre-order instead of an
+  // immediate dispatch. It stays fully purchasable either way.
+  const preorder = product.stock < 1;
+
+  document.getElementById('content').innerHTML = `
+    <div>
+      <div class="pd-img" id="pd-main-img">${gallery.length ? `<img src="${gallery[0]}" alt="${product.brand} ${product.model}">` : deviceArt(product.brand, product.model)}${preorder ? '<span class="sold-badge">PRE-ORDER</span>' : ''}</div>
+      ${gallery.length > 1 ? `<div class="pd-thumbs">${gallery.map((src, i) => `<img src="${src}" data-i="${i}" class="${i === 0 ? 'active' : ''}">`).join('')}</div>` : ''}
+    </div>
+    <div>
+      <span class="pd-tag">${product.condition}</span>
+      <span class="pd-tag" style="margin-left:8px;color:var(--text-dim);border-color:var(--line);">${product.category || 'Phones'}</span>
+      <h1 class="pd-title">${product.brand} ${product.model}</h1>
+      <div class="pd-sub">${product.storage || ''}${product.storage && product.color ? ' · ' : ''}${product.color || ''}</div>
+      <div class="pd-price mono">${fmtPrice(product.price)}</div>
+      <div class="pd-price-lbl">${preorder ? 'PRE-ORDER — SOURCED ON REQUEST' : 'LIST PRICE · NEGOTIABLE'}</div>
+      <div class="specs">
+        <div class="spec-row"><span class="k">Brand</span><span>${product.brand}</span></div>
+        <div class="spec-row"><span class="k">Model</span><span>${product.model}</span></div>
+        <div class="spec-row"><span class="k">Category</span><span>${product.category || 'Phones'}</span></div>
+        ${product.storage ? `<div class="spec-row"><span class="k">Storage</span><span>${product.storage}</span></div>` : ''}
+        ${product.color ? `<div class="spec-row"><span class="k">Color</span><span>${product.color}</span></div>` : ''}
+        <div class="spec-row"><span class="k">Condition</span><span>${product.condition}</span></div>
+        <div class="spec-row"><span class="k">In stock</span><span>${preorder ? 'Pre-order (sourced on request)' : 'Available on request'}</span></div>
+      </div>
+      <div class="pd-actions">
+        <a class="btn btn-primary" href="/checkout?id=${product.id}">${preorder ? 'Pre-order now' : 'Buy now'}</a>
+        <button class="btn btn-ghost" onclick="openOffer()">Make an offer</button>
+      </div>
+      ${preorder ? `<div class="helper" style="margin-top:8px;">This one's sold through — we'll source it from our supplier network and confirm your delivery timeline after you order.</div>` : ''}
+      <div class="pd-actions" style="margin-top:10px;">
+        <a class="btn btn-ghost" href="/sell" style="width:100%;">Trade this in instead</a>
+      </div>
+    </div>
+  `;
+
+  document.querySelectorAll('.pd-thumbs img').forEach((thumb) => {
+    thumb.addEventListener('click', () => {
+      document.querySelectorAll('.pd-thumbs img').forEach((t) => t.classList.remove('active'));
+      thumb.classList.add('active');
+      document.querySelector('#pd-main-img img').src = gallery[Number(thumb.dataset.i)];
+    });
+  });
+}
+
+function openOffer() {
+  document.getElementById('offer-sub').textContent = `${product.brand} ${product.model} — listed at ${fmtPrice(product.price)}`;
+  document.getElementById('offer-overlay').classList.add('open');
+}
+function closeOffer() { document.getElementById('offer-overlay').classList.remove('open'); }
+
+let offerChannel = 'whatsapp';
+document.querySelectorAll('#offer-form button[type=submit]').forEach((btn) => {
+  btn.addEventListener('click', () => { offerChannel = btn.dataset.channel; });
+});
+
+document.getElementById('offer-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const body = { productId: id, amount: fd.get('amount'), name: fd.get('name'), phone: fd.get('phone'), email: fd.get('email'), message: fd.get('message') };
+  try {
+    const { whatsappUrl, mailtoUrl } = await api('/api/offers', { method: 'POST', body });
+    const url = offerChannel === 'email' ? mailtoUrl : whatsappUrl;
+    toast(offerChannel === 'email' ? 'Offer saved — opening your email app…' : 'Offer saved — opening WhatsApp…');
+    window.open(url, offerChannel === 'email' ? '_self' : '_blank');
+    closeOffer();
+    e.target.reset();
+  } catch (err) {
+    toast(err.message);
+  }
+});
+
+load();
+api('/api/track', { method: 'POST', body: { type: 'page_view', path: '/product' } }).catch(() => {});
+if (id) api('/api/track', { method: 'POST', body: { type: 'product_view', productId: id } }).catch(() => {});
+</script>
+</body>
+</html>

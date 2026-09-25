@@ -11,6 +11,8 @@ const { uploadBuffer } = require('./lib/storage');
 const { setAdminCookie, clearAdminCookie, isAdminRequest } = require('./lib/auth');
 const payments = require('./lib/payments');
 const { generateQuotePdf, generateInvoicePdf } = require('./lib/documents');
+const bot = require('./lib/bot/engine');
+const wa = require('./lib/whatsapp');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -199,7 +201,14 @@ app.post('/api/checkout', asyncRoute(async (req, res) => {
 
   const product = await db.getProduct(productId);
   if (!product) return res.status(404).json({ error: 'Product not found' });
-  if (!product.active || product.stock < 1) return res.status(400).json({ error: 'This device is no longer available' });
+  if (!product.active) return res.status(400).json({ error: 'This device is no longer available' });
+
+  // We source from a supplier network, so running out of on-hand units doesn't
+  // mean we can't fulfil the order — it just means this one becomes a
+  // pre-order instead of an immediate dispatch. We still take one unit off
+  // stock (floor 0) so the listing shows "Pre-order" once depleted, but we
+  // never block the purchase outright.
+  const isPreOrder = product.stock < 1;
 
   const method = fulfillmentMethod === 'collection' ? 'collection' : 'delivery';
   if (method === 'delivery') {
@@ -217,8 +226,12 @@ app.post('/api/checkout', asyncRoute(async (req, res) => {
     deliveryAddress: method === 'delivery' ? address : {}, fulfillmentMethod: method,
     courier: 'Courier Guy', paymentMethod: wantsGateway ? paymentMethod : 'manual',
     paymentStatus: 'pending', amount: product.price,
-    notes: notes || ''
+    notes: (isPreOrder ? '[PRE-ORDER — source from supplier before dispatch] ' : '') + (notes || '')
   });
+
+  // Reserve a unit against this listing (floor 0) so the storefront reflects
+  // it immediately — same "one unit off stock" rule as accepting an offer.
+  await db.updateProduct(product.id, { stock: Math.max(0, (product.stock || 0) - 1) });
 
   const addressLine = method === 'delivery'
     ? `${address.line1}${address.line2 ? ', ' + address.line2 : ''}, ${address.city}, ${address.postalCode}${address.province ? ', ' + address.province : ''}`
@@ -228,7 +241,7 @@ app.post('/api/checkout', asyncRoute(async (req, res) => {
     try {
       const result = await payments.createCheckout(paymentMethod, order, cfg.paymentSettings);
       await db.updateOrder(order.id, { paymentRef: result.providerRef || '' });
-      return res.json({ order, redirectUrl: result.redirectUrl });
+      return res.json({ order, redirectUrl: result.redirectUrl, preOrder: isPreOrder });
     } catch (err) {
       // Gateway not actually live yet (or the call failed) — fall back to the
       // manual handoff rather than dead-ending the customer.
@@ -240,6 +253,7 @@ app.post('/api/checkout', asyncRoute(async (req, res) => {
 
   res.json({
     order,
+    preOrder: isPreOrder,
     whatsappUrl: waLink(cfg.whatsappNumber, summary),
     mailtoUrl: mailtoLink(cfg.contactEmail, `Order: ${product.brand} ${product.model} (ref ${order.id.slice(0, 8)})`, summary)
   });
@@ -605,6 +619,91 @@ app.put('/api/admin/config/payments/:key', requireAdmin, asyncRoute(async (req, 
   const nextSettings = { ...cfg.paymentSettings, [key]: { enabled: !!req.body.enabled } };
   const updated = await db.updateConfig({ paymentSettings: nextSettings });
   res.json({ ...updated, paymentProviders: payments.listProviders(updated.paymentSettings) });
+}));
+
+// ================= WHATSAPP BOT =================
+
+// Meta's one-time webhook verification handshake — done once when you paste
+// the webhook URL into the Meta developer console. Must echo back hub.challenge
+// as plain text if the verify token matches what you set there.
+app.get('/api/whatsapp/webhook', (req, res) => {
+  const mode = req.query['hub.mode'];
+  const token = req.query['hub.verify_token'];
+  const challenge = req.query['hub.challenge'];
+  if (mode === 'subscribe' && token && process.env.WHATSAPP_VERIFY_TOKEN && token === process.env.WHATSAPP_VERIFY_TOKEN) {
+    return res.status(200).send(challenge);
+  }
+  return res.sendStatus(403);
+});
+
+// Every inbound WhatsApp message (and delivery/read status update, which we
+// ignore) lands here. Meta expects a fast 200 — the bot's own replies go out
+// as separate API calls from inside handleMessage, not as this response body.
+app.post('/api/whatsapp/webhook', asyncRoute(async (req, res) => {
+  res.sendStatus(200); // ack immediately so Meta doesn't retry/duplicate
+
+  try {
+    const entry = req.body?.entry?.[0];
+    const change = entry?.changes?.[0]?.value;
+    const messages = change?.messages || [];
+    const contact = change?.contacts?.[0];
+
+    for (const msg of messages) {
+      const phone = msg.from;
+      const profileName = contact?.profile?.name || '';
+      let text = '';
+      let buttonId = null;
+
+      if (msg.type === 'text') text = msg.text?.body || '';
+      else if (msg.type === 'interactive' && msg.interactive?.type === 'button_reply') buttonId = msg.interactive.button_reply.id;
+      else if (msg.type === 'interactive' && msg.interactive?.type === 'list_reply') buttonId = msg.interactive.list_reply.id;
+      else if (msg.type === 'button') buttonId = msg.button?.payload || msg.button?.text;
+      else continue; // images/audio/location/etc. from a customer — not handled yet
+
+      wa.markRead(msg.id).catch(() => {});
+      await bot.handleMessage({ phone, text, buttonId, profileName });
+    }
+  } catch (err) {
+    console.error('[whatsapp webhook] error handling message:', err);
+  }
+}));
+
+// ================= ADMIN: WHATSAPP BOT =================
+
+app.get('/api/admin/bot/conversations', requireAdmin, asyncRoute(async (req, res) => {
+  const handoffOnly = req.query.handoff === 'true';
+  res.json(await db.listConversations({ handoffOnly }));
+}));
+
+app.get('/api/admin/bot/conversations/:id/messages', requireAdmin, asyncRoute(async (req, res) => {
+  res.json(await db.listMessages(req.params.id));
+}));
+
+// Admin sends a message directly into a bot conversation — used once a chat is
+// handed off, so Thulani can keep replying in the same thread from the dashboard.
+app.post('/api/admin/bot/conversations/:id/send', requireAdmin, asyncRoute(async (req, res) => {
+  const conversation = await db.getConversation(req.params.id);
+  if (!conversation) return res.status(404).json({ error: 'Not found' });
+  const body = (req.body.message || '').trim();
+  if (!body) return res.status(400).json({ error: 'Message required' });
+  await wa.sendText(conversation.phone, body);
+  const message = await db.addMessage({ conversationId: conversation.id, phone: conversation.phone, direction: 'out', body, meta: { admin: true } });
+  res.json(message);
+}));
+
+// Mutes/unmutes the bot for one customer without affecting anyone else's chat.
+app.post('/api/admin/bot/conversations/:id/pause', requireAdmin, asyncRoute(async (req, res) => {
+  const conversation = await db.updateConversation(req.params.id, { paused: !!req.body.paused });
+  if (!conversation) return res.status(404).json({ error: 'Not found' });
+  res.json(conversation);
+}));
+
+// Hands a conversation back to the bot after an admin has sorted things out
+// manually — clears the handoff flag and resets to the main menu.
+app.post('/api/admin/bot/conversations/:id/resolve', requireAdmin, asyncRoute(async (req, res) => {
+  const conversation = await db.updateConversation(req.params.id, { handoff: false, handoffReason: '', stage: 'greeting', context: {} });
+  if (!conversation) return res.status(404).json({ error: 'Not found' });
+  res.json(conversation);
 }));
 
 // ================= PAGES =================
