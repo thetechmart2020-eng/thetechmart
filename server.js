@@ -113,7 +113,8 @@ function publicConfig(cfg) {
 // product and a photo filename can be compared the same way regardless of
 // spacing/casing/punctuation.
 function slugify(s) {
-  return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  // "+" becomes "plus" so "Galaxy S21+" and "Galaxy S21" get different file names.
+  return String(s || '').toLowerCase().replace(/\+/g, ' plus ').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 function productFullKey(p) {
   return slugify([p.brand, p.model, p.storage, p.color].filter(Boolean).join('-'));
@@ -133,6 +134,13 @@ function matchFilenameToProduct(filename, products) {
 
   const exact = products.find((p) => productFullKey(p) === fileSlug);
   if (exact) return { product: exact };
+
+  // A trailing -2 to -5 means "extra photo of the same device" (e.g. apple-iphone-13-128gb-2.jpg).
+  const numbered = fileSlug.match(/^(.*)-[2-5]$/);
+  if (numbered) {
+    const base = products.find((p) => productFullKey(p) === numbered[1]);
+    if (base) return { product: base };
+  }
 
   const byBrandModel = products.filter((p) => {
     const key = productBrandModelKey(p);

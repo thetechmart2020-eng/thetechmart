@@ -50,7 +50,7 @@
       </div>
       <div class="upload-box">
         <div><b>Bulk photo upload</b></div>
-        <div class="helper">Select as many photos as you like at once. Name each file to match the device — e.g. <span class="mono">apple-iphone-13-128gb-blue.jpg</span> — and it's matched and added to that device's gallery automatically. Spacing, capitalization and dashes vs. underscores don't matter; if the brand+model alone is unique (e.g. <span class="mono">samsung-s22-ultra.jpg</span>) that's enough too.</div>
+        <div class="helper">Select as many photos as you like at once. Name each file exactly like the device: brand, model, storage and colour (if it has one), e.g. <span class="mono">apple-iphone-13-128gb.jpg</span> or <span class="mono">samsung-galaxy-s21-plus-128gb.jpg</span> (a + in a name is written <span class="mono">plus</span>). Add <span class="mono">-2</span>, <span class="mono">-3</span> up to <span class="mono">-5</span> for extra photos of the same device (<span class="mono">apple-iphone-13-128gb-2.jpg</span>). The first photo is the main one. Photos are resized for you. Use JPG or PNG (iPhone users: set Camera to Most Compatible, or share as JPG).</div>
         <input type="file" id="bulk-image-files" accept="image/*" multiple>
         <div style="margin-top:12px;"><button class="btn btn-primary btn-sm" onclick="uploadBulkImages()">Upload &amp; match photos</button></div>
         <div id="bulk-image-results" style="margin-top:14px;"></div>
@@ -472,7 +472,8 @@ async function removeProductImage(url) {
 }
 
 async function uploadBulkImages() {
-  const files = [...document.getElementById('bulk-image-files').files];
+  // Sorted by name so apple-iphone-13-128gb.jpg (main) is added before apple-iphone-13-128gb-2.jpg
+  const files = [...document.getElementById('bulk-image-files').files].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
   if (!files.length) return toast('Choose some photos first');
   const resultsEl = document.getElementById('bulk-image-results');
   try {
