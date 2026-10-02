@@ -12,8 +12,14 @@
 - Pages are rendered by `server.js` with the data embedded (`window.__BOOT__`) and cached at the Vercel edge (30s), so pages draw without waiting on the API.
 - Admin pages and `public/css/style.css`, `public/js/common.js` are unchanged.
 
-## Placeholders still to fill (marked yellow on the site)
-Return policy, trading hours, Courier Guy delivery fee. Search for `PLACEHOLDER` in `views/`.
+## Policy text
+Trading hours, returns/warranty and delivery/payment wording lives in ONE file: `views/partials/policy.html` (used by the footer and the /policies page). Edit it there.
+
+## Delivery fee
+Flat R100 is set once: `DELIVERY_FEE` at the top of `server.js`. Collection is R0. The server works out the total and uses it for the saved order, the WhatsApp/email message and the Yoco amount.
+
+## Product photos (for the shop owner)
+Admin > Stock > the "Photos" button on a device > choose photos > Add photo(s). Up to 5 per device, the first is the main photo, "Make main" changes it. Photos are resized and compressed in your browser (max 1200px, about 200 KB, WebP) and a small 480px copy is made for the shop cards. Bulk: Admin > bulk photo upload, name files like `apple-iphone-13-128gb-blue.jpg`. Devices without a photo show "Photo coming soon".
 
 ## Facts shown on the site
-Grade A-B (Like new / Good), New shown as New, Fair/damaged show their real condition; 3-month warranty, 21-day on special offers; 2-day Courier Guy delivery; R300 per sales referral; payments: Card (Yoco), EFT, Cash on collection; online / WhatsApp only.
+Grade A-B (Like new / Good), New shown as New, Fair/damaged show their real condition; 3-month repair or replacement warranty (standard-price devices), 21-day replacement warranty (negotiated devices); Courier Guy delivery flat R100, about 2 days; R300 per sales referral; payments: Card (Yoco), EFT, Cash on collection; online / WhatsApp only.

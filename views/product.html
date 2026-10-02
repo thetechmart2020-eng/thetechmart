@@ -85,17 +85,18 @@
   function render(p, similar) {
     product = p;
     var name = T.deviceName(p), sold = T.isSold(p), g = T.gradeBadge(p), st = T.stockLine(p);
-    var gallery = (p.images && p.images.length) ? p.images : (p.imageUrl ? [p.imageUrl] : []);
+    var gallery = ((p.images && p.images.length) ? p.images : (p.imageUrl ? [p.imageUrl] : [])).filter(Boolean);
+    var thumbs0 = (p.thumbs && p.thumbs.length === gallery.length) ? p.thumbs : gallery;
     var wa = T.waLink('Hi TheTechMart, I am interested in the ' + name + ' (' + T.money(p.price) + '). Is it available?');
     var ask = T.waLink('Hi TheTechMart, I have a question about the ' + name + '.');
     $('crumb-cat').textContent = p.category || 'Phones';
     document.title = name + ' ' + T.money(p.price) + ' | TheTechMart';
 
     var main = gallery.length
-      ? '<img id="main-img" src="' + T.esc(gallery[0]) + '" alt="' + T.esc(p.brand + ' ' + p.model) + '" width="800" height="800" fetchpriority="high" decoding="async">'
-      : '<div class="ph" role="img" aria-label="' + T.esc(name) + '">' + T.I[(T.CATS.find(function (c) { return c.name === p.category; }) || { icon: 'phone' }).icon] + '</div>';
+      ? '<img id="main-img" src="' + T.esc(gallery[0]) + '" alt="' + T.esc(p.brand + ' ' + p.model) + '" width="1200" height="1200" fetchpriority="high" decoding="async">'
+      : '<div class="card-ph" role="img" aria-label="' + T.esc(name + ': photo coming soon') + '">Photo coming soon</div>';
     var thumbs = gallery.length > 1 ? '<div class="thumbs">' + gallery.map(function (src, i) {
-      return '<button type="button" data-i="' + i + '" aria-label="Photo ' + (i + 1) + '" ' + (i === 0 ? 'aria-current="true"' : '') + '><img src="' + T.esc(src) + '" alt="" loading="lazy" width="64" height="64"></button>';
+      return '<button type="button" data-i="' + i + '" aria-label="Photo ' + (i + 1) + '" ' + (i === 0 ? 'aria-current="true"' : '') + '><img src="' + T.esc(thumbs0[i]) + '" alt="' + T.esc(p.brand + ' ' + p.model + ' photo ' + (i + 1)) + '" loading="lazy" width="64" height="64"></button>';
     }).join('') + '</div>' : '';
 
     var spec = function (k, v) { return v ? '<div><dt>' + k + '</dt><dd>' + T.esc(v) + '</dd></div>' : ''; };
@@ -109,8 +110,8 @@
         '<div class="stock ' + st.cls + '">' + st.text + '</div>' +
         '<div class="badges"><span class="badge ' + g.cls + '">' + T.esc(g.text) + '</span><span class="badge badge-warranty">' + T.esc(T.warrantyBadge(p)) + '</span><span class="badge">' + T.esc(p.condition) + '</span></div>' +
         '<ul class="note-list">' +
-          line('truck', '2-day delivery via The Courier Guy') +
-          line('shield', p.deal ? '21-day warranty (special offer)' : '3-month warranty') +
+          line('truck', 'Delivery R100 flat. The Courier Guy, about 2 days.') +
+          line('shield', p.deal ? '21-day replacement warranty (negotiated device)' : '3-month repair or replacement warranty') +
           line('tag', 'Not quite the right price? Make an offer.') +
         '</ul>' +
         '<div class="pd-actions">' + (sold

@@ -7,11 +7,16 @@ const { parse } = require('csv-parse/sync');
 const path = require('path');
 const fs = require('fs');
 const db = require('./db');
-const { uploadBuffer } = require('./lib/storage');
+const { uploadBuffer, uploadProductPhoto } = require('./lib/storage');
 const { setAdminCookie, clearAdminCookie, isAdminRequest } = require('./lib/auth');
 const payments = require('./lib/payments');
 const { generateQuotePdf, generateInvoicePdf, generatePriceListPdf } = require('./lib/documents');
 const deals = require('./lib/deals');
+
+// Flat Courier Guy delivery fee in rand. Collection is R0. This is the ONE place the fee is set:
+// checkout, the saved order, the WhatsApp/email message, the Yoco amount and the site text all use it.
+const DELIVERY_FEE = 100;
+const MAX_PHOTOS = 5;
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -27,9 +32,10 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // ---------- Uploads (memory — files go straight to Supabase Storage, never to disk) ----------
 const csvUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } });
-const imageUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
+// Product photos are shrunk in the admin page first (about 200 KB), so anything big is rejected.
+const imageUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 600 * 1024 } });
 const tradeinUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
-const bulkImageUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024, files: 60 } });
+const bulkImageUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 600 * 1024, files: 120 } });
 
 // ---------- Helpers ----------
 function requireAdmin(req, res, next) {
@@ -74,23 +80,31 @@ function waDisplay(number) {
   return d;
 }
 
-// Public shape of a product (adds the "special offer" flag used for the 21-day warranty badge).
+// Public shape of a product (adds the "negotiated device" flag used for the 21-day warranty badge).
 function publicProduct(p) {
-  return { ...p, deal: deals.isDeal(p) };
+  const images = (p.images && p.images.length ? p.images : (p.imageUrl ? [p.imageUrl] : [])).filter(Boolean);
+  return { ...p, images, thumbs: images.map(thumbOf), deal: deals.isDeal(p) };
+}
+
+// Small card version of a product photo. Photos uploaded through the admin come as
+// "<id>-1200.webp" (main) and "<id>-480.webp" (card); older photos have no small version.
+function thumbOf(url) {
+  return /-1200\.(webp|jpg)$/.test(url || '') ? url.replace(/-1200\.(webp|jpg)$/, '-480.$1') : url;
 }
 
 // Only what the browser needs to draw a product card (keeps the page payload small).
 function cardProduct(p) {
   return {
     id: p.id, brand: p.brand, model: p.model, category: p.category, price: p.price, condition: p.condition,
-    storage: p.storage, color: p.color, stock: p.stock, imageUrl: p.imageUrl || null, deal: deals.isDeal(p)
+    storage: p.storage, color: p.color, stock: p.stock, imageUrl: p.imageUrl || null,
+    thumbUrl: p.imageUrl ? thumbOf(p.imageUrl) : null, deal: deals.isDeal(p)
   };
 }
 
 function publicConfig(cfg) {
   return {
     storeName: cfg.storeName, whatsapp: cfg.whatsappNumber, whatsappDisplay: waDisplay(cfg.whatsappNumber),
-    email: cfg.contactEmail
+    email: cfg.contactEmail, deliveryFee: DELIVERY_FEE
   };
 }
 
@@ -260,6 +274,13 @@ app.post('/api/checkout', asyncRoute(async (req, res) => {
   const isPreOrder = product.stock < 1;
 
   const method = fulfillmentMethod === 'collection' ? 'collection' : 'delivery';
+  // Cash is only offered with collection.
+  if (paymentPreference === 'cash' && method === 'delivery') {
+    return res.status(400).json({ error: 'Cash is only available with collection. Please choose EFT or card for delivery.' });
+  }
+  // One server-side total: device price + flat delivery (R0 for collection).
+  const deliveryFee = method === 'delivery' ? DELIVERY_FEE : 0;
+  const total = Number(product.price) + deliveryFee;
   if (method === 'delivery') {
     if (!address || !address.line1 || !address.city || !address.postalCode) {
       return res.status(400).json({ error: 'Delivery address (address, city, postal code) is required for Courier Guy delivery' });
@@ -274,7 +295,7 @@ app.post('/api/checkout', asyncRoute(async (req, res) => {
     customerName: name, customerPhone: phone, customerEmail: email,
     deliveryAddress: method === 'delivery' ? address : {}, fulfillmentMethod: method,
     courier: 'Courier Guy', paymentMethod: wantsGateway ? paymentMethod : 'manual',
-    paymentStatus: 'pending', amount: product.price,
+    paymentStatus: 'pending', amount: total,
     notes: (isPreOrder ? '[PRE-ORDER — source from supplier before dispatch] ' : '')
       + (['card', 'eft', 'cash'].includes(paymentPreference) ? `[Payment preference: ${paymentPreference.toUpperCase()}] ` : '')
       + (notes || '')
@@ -293,7 +314,7 @@ app.post('/api/checkout', asyncRoute(async (req, res) => {
     try {
       const result = await payments.createCheckout(paymentMethod, order, cfg.paymentSettings);
       await db.updateOrder(order.id, { paymentRef: result.providerRef || '' });
-      return res.json({ order, redirectUrl: result.redirectUrl, preOrder: isPreOrder });
+      return res.json({ order, redirectUrl: result.redirectUrl, preOrder: isPreOrder, deliveryFee, total });
     } catch (err) {
       // Gateway not actually live yet (or the call failed) — fall back to the
       // manual handoff rather than dead-ending the customer.
@@ -302,11 +323,12 @@ app.post('/api/checkout', asyncRoute(async (req, res) => {
   }
 
   const prefLabel = { card: 'Card', eft: 'EFT / bank transfer', cash: 'Cash on collection' }[paymentPreference] || '';
-  const summary = `Hi TheTechMart! I'd like to buy this device.\n\nDevice: ${product.brand} ${product.model}${product.storage ? ' · ' + product.storage : ''}\nPrice: R${product.price}\nName: ${name}\nEmail: ${email}\nContact: ${phone}\nFulfillment: ${method === 'delivery' ? 'Courier Guy delivery to ' + addressLine : 'Collection (arranged on WhatsApp)'}\n${prefLabel ? 'Payment: ' + prefLabel + '\n' : ''}${isPreOrder ? 'Pre-order: yes\n' : ''}${notes ? 'Notes: ' + notes : ''}\n\n(Order ref: ${order.id.slice(0, 8)})`;
+  const summary = `Hi TheTechMart! I'd like to buy this device.\n\nDevice: ${product.brand} ${product.model}${product.storage ? ' · ' + product.storage : ''}\nDevice price: R${product.price}\nDelivery: ${method === 'delivery' ? 'R' + deliveryFee + ' (flat, The Courier Guy, about 2 days)' : 'R0 (collection)'}\nTotal: R${total}\nName: ${name}\nEmail: ${email}\nContact: ${phone}\nFulfillment: ${method === 'delivery' ? 'Courier Guy delivery to ' + addressLine : 'Collection (arranged on WhatsApp)'}\n${prefLabel ? 'Payment: ' + prefLabel + '\n' : ''}${isPreOrder ? 'Pre-order: yes\n' : ''}${notes ? 'Notes: ' + notes : ''}\n\n(Order ref: ${order.id.slice(0, 8)})`;
 
   res.json({
     order,
     preOrder: isPreOrder,
+    deliveryFee, total,
     whatsappUrl: waLink(cfg.whatsappNumber, summary),
     mailtoUrl: mailtoLink(cfg.contactEmail, `Order: ${product.brand} ${product.model} (ref ${order.id.slice(0, 8)})`, summary)
   });
@@ -448,58 +470,77 @@ app.delete('/api/admin/products/:id', requireAdmin, asyncRoute(async (req, res) 
   res.json({ ok: true });
 }));
 
-// Single-product photo upload (from the "Photo" button in Stock). Adds to that
-// product's gallery, and sets it as the cover shot only if there isn't one yet.
-app.post('/api/admin/products/:id/image', requireAdmin, imageUpload.single('image'), asyncRoute(async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'No image uploaded' });
+const PHOTO_TYPES = ['image/webp', 'image/jpeg'];
+const TOO_BIG = 'That photo was not resized. Refresh the admin page (Ctrl+F5) and try again.';
+
+// Single-product photo upload (the "Photos" button in Stock). The admin page sends the
+// resized main image ("image") and the small card version ("thumb"). Max 5 per product.
+// The first photo is the main one; use "Make main" to change it.
+app.post('/api/admin/products/:id/image', requireAdmin, imageUpload.fields([{ name: 'image', maxCount: 1 }, { name: 'thumb', maxCount: 1 }]), asyncRoute(async (req, res) => {
+  const main = req.files && req.files.image && req.files.image[0];
+  const thumb = req.files && req.files.thumb && req.files.thumb[0];
+  if (!main) return res.status(400).json({ error: 'No image uploaded' });
+  if (!PHOTO_TYPES.includes(main.mimetype)) return res.status(400).json({ error: TOO_BIG });
   const existing = await db.getProduct(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Not found' });
-  const url = await uploadBuffer('product-images', req.file);
-  const images = [...(existing.images || []), url];
-  const patch = { images };
-  if (!existing.imageUrl) patch.imageUrl = url;
-  const p = await db.updateProduct(req.params.id, patch);
+  const current = (existing.images || []).filter(Boolean);
+  if (current.length >= MAX_PHOTOS) return res.status(400).json({ error: `A product can have up to ${MAX_PHOTOS} photos. Remove one first.` });
+  const url = await uploadProductPhoto(main, thumb);
+  const images = [...current, url];
+  const p = await db.updateProduct(req.params.id, { images, imageUrl: images[0] });
   res.json(p);
 }));
 
-// Removes one photo from a product's gallery. If it was the cover shot, the
-// next remaining photo (if any) becomes the new cover.
+// Removes one photo from a product's gallery. The first remaining photo becomes the main one.
 app.delete('/api/admin/products/:id/image', requireAdmin, asyncRoute(async (req, res) => {
   const { url } = req.body;
   const existing = await db.getProduct(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Not found' });
-  const images = (existing.images || []).filter((u) => u !== url);
-  const patch = { images };
-  if (existing.imageUrl === url) patch.imageUrl = images[0] || null;
-  const p = await db.updateProduct(req.params.id, patch);
+  const images = (existing.images || []).filter((u) => u && u !== url);
+  const p = await db.updateProduct(req.params.id, { images, imageUrl: images[0] || null });
   res.json(p);
 }));
 
-// Bulk photo upload: drop in a folder of files named like
-// "apple-iphone-13-128gb-blue.jpg" (spacing/casing/punctuation don't matter)
-// and each one gets matched to the right product by brand+model(+storage+color)
-// and added to its gallery — no per-SKU clicking through the admin panel.
-app.post('/api/admin/products/bulk-images', requireAdmin, bulkImageUpload.array('images', 60), asyncRoute(async (req, res) => {
-  if (!req.files || !req.files.length) return res.status(400).json({ error: 'No images uploaded' });
+// Makes one photo the main (first) photo.
+app.put('/api/admin/products/:id/image/main', requireAdmin, asyncRoute(async (req, res) => {
+  const { url } = req.body;
+  const existing = await db.getProduct(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Not found' });
+  const rest = (existing.images || []).filter((u) => u && u !== url);
+  if (rest.length === (existing.images || []).filter(Boolean).length) return res.status(400).json({ error: 'Photo not found on this product' });
+  const images = [url, ...rest];
+  res.json(await db.updateProduct(req.params.id, { images, imageUrl: url }));
+}));
+
+// Bulk photo upload: files named like "apple-iphone-13-128gb-blue.jpg" (spacing/casing/
+// punctuation don't matter) are matched to the right product by brand+model(+storage+color)
+// and added to its gallery. The admin page resizes each file and sends a small card version
+// ("thumbs") in the same order as "images". Max 5 photos per product.
+app.post('/api/admin/products/bulk-images', requireAdmin, bulkImageUpload.fields([{ name: 'images', maxCount: 60 }, { name: 'thumbs', maxCount: 60 }]), asyncRoute(async (req, res) => {
+  const files = (req.files && req.files.images) || [];
+  const thumbs = (req.files && req.files.thumbs) || [];
+  if (!files.length) return res.status(400).json({ error: 'No images uploaded' });
   const products = await db.listProducts();
 
   const results = [];
-  for (const file of req.files) {
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    if (!PHOTO_TYPES.includes(file.mimetype)) { results.push({ filename: file.originalname, matched: false, reason: TOO_BIG }); continue; }
     const { product, ambiguous } = matchFilenameToProduct(file.originalname, products);
     if (!product) {
       results.push({
         filename: file.originalname, matched: false,
-        reason: ambiguous ? `Matches multiple products (${ambiguous.join(', ')}) — rename more specifically` : 'No matching product found'
+        reason: ambiguous ? `Matches multiple products (${ambiguous.join(', ')}). Rename more specifically` : 'No matching product found'
       });
       continue;
     }
     try {
-      const url = await uploadBuffer('product-images', file);
       const current = await db.getProduct(product.id);
-      const images = [...(current.images || []), url];
-      const patch = { images };
-      if (!current.imageUrl) patch.imageUrl = url;
-      await db.updateProduct(product.id, patch);
+      const have = (current.images || []).filter(Boolean);
+      if (have.length >= MAX_PHOTOS) { results.push({ filename: file.originalname, matched: false, reason: `Already has ${MAX_PHOTOS} photos` }); continue; }
+      const url = await uploadProductPhoto(file, thumbs[i]);
+      const images = [...have, url];
+      await db.updateProduct(product.id, { images, imageUrl: images[0] });
       results.push({ filename: file.originalname, matched: true, product: `${product.brand} ${product.model}` });
     } catch (err) {
       results.push({ filename: file.originalname, matched: false, reason: err.message });
@@ -585,6 +626,16 @@ app.put('/api/admin/orders/:id', requireAdmin, asyncRoute(async (req, res) => {
   res.json(o);
 }));
 
+// Invoice/quote lines: the device at its listed price plus the delivery fee that was added at checkout.
+function orderItems(order, product) {
+  const label = product ? `${product.brand} ${product.model}` : (order.notes || 'Device');
+  const price = product ? Number(product.price) : Number(order.amount);
+  const delivery = Number(order.amount) - price;
+  const items = [{ label, amount: delivery > 0 ? price : Number(order.amount) }];
+  if (delivery > 0) items.push({ label: 'Courier Guy delivery (flat)', amount: delivery });
+  return items;
+}
+
 function orderAddressLine(order) {
   const a = order.deliveryAddress || {};
   if (order.fulfillmentMethod === 'collection' || !a.line1) return null;
@@ -602,7 +653,7 @@ app.post('/api/admin/orders/:id/quote', requireAdmin, asyncRoute(async (req, res
   const pdf = await generateQuotePdf({
     number, cfg,
     customer: { name: order.customerName, phone: order.customerPhone, email: order.customerEmail, address: orderAddressLine(order) },
-    items: [{ label: product ? `${product.brand} ${product.model}` : (order.notes || 'Device'), amount: order.amount }],
+    items: orderItems(order, product),
     note: order.notes || ''
   });
   const url = await uploadBuffer('documents', { buffer: pdf, mimetype: 'application/pdf', originalname: `${number}.pdf` });
@@ -629,7 +680,7 @@ app.post('/api/admin/orders/:id/invoice', requireAdmin, asyncRoute(async (req, r
   const pdf = await generateInvoicePdf({
     number, cfg,
     customer: { name: order.customerName, phone: order.customerPhone, email: order.customerEmail, address: addressLine },
-    items: [{ label: product ? `${product.brand} ${product.model}` : (order.notes || 'Device'), amount: order.amount }],
+    items: orderItems(order, product),
     paymentStatus: order.paymentStatus, paymentMethod: order.paymentMethod,
     fulfillment: order.fulfillmentMethod === 'collection' ? 'Collection' : `${order.courier || 'Courier Guy'} delivery${addressLine ? ' — ' + addressLine : ''}`,
     note: order.notes || ''
@@ -711,7 +762,9 @@ function safeJson(obj) {
 function renderView(name, { title, description, canonical, ogImage, ogType = 'website', noindex = false, jsonld, boot } = {}, base = '') {
   let html = readView(name)
     .replace('<!--HEADER-->', readView('partials/header.html'))
-    .replace('<!--FOOTER-->', readView('partials/footer.html'));
+    .replace('<!--FOOTER-->', readView('partials/footer.html'))
+    // Trading hours / returns / delivery text lives in ONE partial, used by the footer and the /policies page.
+    .split('<!--POLICY-->').join(readView('partials/policy.html'));
   const tokens = {
     TITLE: title || 'TheTechMart | the #1 electronics market',
     DESCRIPTION: description || 'Quality-checked pre-owned phones and electronics with a 3-month warranty and 2-day Courier Guy delivery.',
@@ -729,7 +782,7 @@ function renderView(name, { title, description, canonical, ogImage, ogType = 'we
 app.get('/sitemap.xml', asyncRoute(async (req, res) => {
   const base = siteBase(req);
   const products = await db.listProducts({ activeOnly: true });
-  const staticUrls = ['', '/sell'];
+  const staticUrls = ['', '/sell', '/policies'];
   const urls = [
     ...staticUrls.map((p) => `<url><loc>${base}${p}</loc><changefreq>daily</changefreq></url>`),
     ...products.map((p) => `<url><loc>${base}/product?id=${p.id}</loc><changefreq>weekly</changefreq></url>`)
@@ -769,10 +822,12 @@ app.get('/', asyncRoute(async (req, res) => {
       {
         '@context': 'https://schema.org', '@type': 'FAQPage',
         mainEntity: [
-          ['What warranty do I get?', 'Every device comes with a 3-month warranty. Special offers carry a 21-day warranty.'],
+          ['What warranty do I get?', 'Standard-price devices come with a 3-month repair or replacement warranty. Negotiated devices (special-price devices) come with a 21-day replacement warranty.'],
           ['What condition are the devices in?', 'Our devices are Grade A-B pre-owned and quality checked.'],
-          ['How long does delivery take?', 'Delivery takes 2 days via The Courier Guy.'],
+          ['How long does delivery take?', 'The Courier Guy delivery: flat R100, about 2 days.'],
           ['Can I make an offer on a price?', 'Yes. Use "Make an offer" on any device and we reply on WhatsApp.'],
+          ['How do I pay?', 'Pay by EFT, Yoco (card) or cash.'],
+          ['What if there is a problem with my device?', 'WhatsApp us on 071 662 3565 with a photo or video showing the problem. We send a reference number and an estimated resolution. Most issues are resolved within about 7 days. This does not limit your statutory consumer rights.'],
           ['Do you buy or trade in devices?', 'Yes. Send us the details and photos of your device through the Sell / Trade-in form and we reply on WhatsApp.']
         ].map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } }))
       }
@@ -819,7 +874,7 @@ app.get('/product', asyncRoute(async (req, res) => {
   const preOrder = product.stock < 1;
   const url = `${base}/product?id=${product.id}`;
   const image = absUrl(base, product.imageUrl);
-  const description = `${name}${product.storage ? ' ' + product.storage : ''}, ${product.condition}, ${fmtR(product.price)}. ${pub.deal ? '21-day warranty (special offer)' : '3-month warranty'}, 2-day Courier Guy delivery. Buy now or make an offer.`;
+  const description = `${name}${product.storage ? ' ' + product.storage : ''}, ${product.condition}, ${fmtR(product.price)}. ${pub.deal ? '21-day replacement warranty (negotiated device)' : '3-month repair or replacement warranty'}, delivery R100 flat (The Courier Guy, about 2 days). Buy now or make an offer.`;
 
   edgeCache(res, 30, 600);
   res.send(renderView('product.html', {
@@ -876,6 +931,16 @@ app.get('/checkout/complete', (req, res) => {
   res.send(renderView('checkout-complete.html', { title: 'Order status | TheTechMart', noindex: true }, siteBase(req)));
 });
 
+app.get('/policies', (req, res) => {
+  const base = siteBase(req);
+  edgeCache(res, 300, 86400);
+  res.send(renderView('policies.html', {
+    title: 'Returns, warranty, delivery and payment | TheTechMart',
+    description: 'Trading hours, warranty and returns, Courier Guy delivery (flat R100, about 2 days) and payment options at TheTechMart.',
+    canonical: `${base}/policies`
+  }, base));
+});
+
 app.get('/sell', asyncRoute(async (req, res) => {
   const base = siteBase(req);
   let boot = null;
@@ -905,6 +970,15 @@ app.get('/price-list.pdf', asyncRoute(async (req, res) => {
 
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'views/admin/login.html')));
 app.get('/admin/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'views/admin/dashboard.html')));
+
+// Upload errors (file too big, too many files) come back as clear JSON instead of a server error page.
+app.use((err, req, res, next) => {
+  if (err && String(err.code || '').startsWith('LIMIT_')) {
+    const admin = req.path.startsWith('/api/admin/products');
+    return res.status(413).json({ error: admin ? TOO_BIG : 'That file is too large. Please use a smaller photo.' });
+  }
+  return next(err);
+});
 
 // Anything else: a friendly page instead of Express's bare "Cannot GET".
 app.use((req, res) => {

@@ -59,7 +59,9 @@
     if (c === 'new') return { text: 'New', cls: 'badge-grade' };
     return { text: 'Grade A-B', cls: 'badge-grade' };
   }
-  function warrantyBadge(p) { return p.deal ? '21-day warranty (special offer)' : '3-month warranty'; }
+  // Normal-price devices: 3-month warranty. Negotiated (special-price) devices, flagged by lib/deals.js: 21-day warranty.
+  function warrantyBadge(p) { return p.deal ? '21-day warranty (negotiated device)' : '3-month warranty'; }
+  var DELIVERY_FEE = (cfg && cfg.deliveryFee != null) ? cfg.deliveryFee : 100;
   function isSold(p) { return !!p.sold || Number(p.stock) < 1; }
   function stockLine(p) {
     var n = Number(p.stock);
@@ -89,11 +91,14 @@
   function catIcon(name) { var c = CATS.find(function (x) { return x.name === name; }); return I[c ? c.icon : 'phone']; }
 
   // Placeholder shown when a product has no photo yet (swap in real photos via CSV imageUrl / admin).
-  function media(p, eager) {
-    if (p.imageUrl) {
-      return '<img src="' + esc(p.imageUrl) + '" alt="' + esc(p.brand + ' ' + p.model) + '" width="400" height="400" decoding="async"' + (eager ? ' fetchpriority="high"' : ' loading="lazy"') + '>';
+  // kind: 'card' uses the small version, 'main' the full-size one. First/main images load eagerly, the rest lazily.
+  function media(p, eager, kind) {
+    var src = kind === 'main' ? p.imageUrl : (p.thumbUrl || p.imageUrl);
+    if (src) {
+      var size = kind === 'main' ? 1200 : 480;
+      return '<img src="' + esc(src) + '" alt="' + esc(p.brand + ' ' + p.model) + '" width="' + size + '" height="' + size + '" decoding="async"' + (eager ? ' fetchpriority="high"' : ' loading="lazy"') + '>';
     }
-    return '<div class="ph" role="img" aria-label="' + esc(p.brand + ' ' + p.model) + '">' + catIcon(p.category) + '</div>';
+    return '<div class="card-ph" role="img" aria-label="' + esc(p.brand + ' ' + p.model + ': photo coming soon') + '">Photo coming soon</div>';
   }
 
   function deviceName(p) { return p.brand + ' ' + p.model + (p.storage ? ' ' + p.storage : ''); }
@@ -145,5 +150,5 @@
 
   window.TTM = { boot: boot, cfg: cfg, esc: esc, money: money, waLink: waLink, track: track, api: api, toast: toast, I: I, CATS: CATS,
     gradeBadge: gradeBadge, warrantyBadge: warrantyBadge, isSold: isSold, stockLine: stockLine, media: media, card: card,
-    skeletons: skeletons, deviceName: deviceName };
+    skeletons: skeletons, deviceName: deviceName, deliveryFee: DELIVERY_FEE };
 })();

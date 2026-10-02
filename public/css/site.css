@@ -284,3 +284,17 @@ body.has-bar { padding-bottom: var(--bar-h); }
 /* ---------- toast ---------- */
 .toast { position: fixed; left: 50%; bottom: calc(var(--bar-h) + 16px); transform: translate(-50%, 20px); background: var(--surface-2); border: 1px solid var(--line); padding: 12px 18px; border-radius: 12px; opacity: 0; pointer-events: none; transition: .25s; z-index: 90; max-width: 90vw; }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* ---------- policy text (footer + /policies) ---------- */
+.policy h3 { font: 600 14px var(--font-body); color: var(--muted); letter-spacing: .08em; text-transform: uppercase; margin: 0 0 6px; }
+.policy section { margin-bottom: 18px; }
+.policy p { color: var(--text); font-size: 15px; max-width: 62ch; }
+.foot-policy .policy p { color: var(--muted); font-size: 14px; }
+.policy-page .policy section:last-child { margin-bottom: 0; }
+.policy-page .policy h3 { color: var(--accent); font-size: 15px; }
+.policy-page .policy p { font-size: 17px; }
+@media (min-width: 800px) { .foot-grid { grid-template-columns: 1.2fr 1fr 1.8fr; } }
+.card-ph { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 12px; color: #6f7b84; font-weight: 600; font-size: 14px; }
+
+/* make the hidden attribute always win over display rules */
+[hidden] { display: none !important; }

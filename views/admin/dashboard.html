@@ -140,9 +140,10 @@
       <button class="modal-close" onclick="document.getElementById('img-overlay').classList.remove('open')">&times;</button>
       <h3>Product photos</h3>
       <p class="sub" id="img-sub"></p>
+      <p class="helper" style="margin-bottom:10px;">Up to 5 photos per device. The first photo is the main one shown on the shop. Photos are resized and compressed for you automatically, so you can pick them straight from your phone or camera.</p>
       <div class="thumb-row" id="img-gallery" style="margin-bottom:14px;"></div>
-      <input type="file" id="img-file" accept="image/*">
-      <button class="btn btn-primary btn-block" style="margin-top:14px;" onclick="uploadImage()">Add photo</button>
+      <input type="file" id="img-file" accept="image/*" multiple>
+      <button class="btn btn-primary btn-block" style="margin-top:14px;" onclick="uploadImage()">Add photo(s)</button>
     </div>
   </div>
 </div>
@@ -381,31 +382,79 @@ function openImageModal(id, label) {
 }
 function renderImgGallery() {
   const p = PRODUCTS.find(x => x.id === imgTargetId);
-  const images = (p && p.images) || [];
+  const images = ((p && p.images) || []).filter(Boolean);
   document.getElementById('img-gallery').innerHTML = images.length
-    ? images.map(url => `
-        <div style="position:relative;">
+    ? images.map((url, i) => `
+        <div style="position:relative;text-align:center;">
           <img src="${url}">
           <button onclick="removeProductImage('${url}')" title="Remove"
             style="position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;background:var(--danger);color:#fff;border:none;font-size:11px;line-height:1;cursor:pointer;">&times;</button>
+          ${i === 0 ? '<div class="helper">Main</div>' : `<button class="btn btn-ghost btn-sm" style="margin-top:4px;padding:2px 8px;" onclick="makeMainImage('${url}')">Make main</button>`}
         </div>
       `).join('')
-    : `<span class="helper">No photos yet.</span>`;
+    : `<span class="helper">No photos yet. The shop shows "Photo coming soon".</span>`;
+}
+
+// Resize + compress in the browser before upload: main image max 1200px wide (WebP, or JPEG if the
+// browser cannot make WebP), quality lowered until it is about 200 KB or less. Also makes a 480px
+// version for the shop cards. This is what keeps the shop fast on phones.
+function canvasBlob(canvas, type, q) { return new Promise(r => canvas.toBlob(r, type, q)); }
+async function loadBitmap(file) {
+  const url = URL.createObjectURL(file);
+  try {
+    return await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('Could not read ' + file.name)); i.src = url; });
+  } finally { setTimeout(() => URL.revokeObjectURL(url), 5000); }
+}
+async function shrinkTo(img, maxW, maxBytes) {
+  const s = Math.min(1, maxW / img.width);
+  const c = document.createElement('canvas');
+  c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+  const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height); ctx.drawImage(img, 0, 0, c.width, c.height);
+  let type = 'image/webp', blob = await canvasBlob(c, type, 0.82);
+  if (!blob || blob.type !== 'image/webp') { type = 'image/jpeg'; blob = await canvasBlob(c, type, 0.82); }
+  for (let q = 0.78; blob.size > maxBytes && q > 0.4; q -= 0.08) blob = await canvasBlob(c, type, q);
+  return blob;
+}
+async function prepPhoto(file) {
+  const img = await loadBitmap(file);
+  const main = await shrinkTo(img, 1200, 200 * 1024);
+  const thumb = await shrinkTo(img, 480, 45 * 1024);
+  const ext = main.type === 'image/webp' ? '.webp' : '.jpg';
+  const base = file.name.replace(/\.[^.]+$/, '');
+  return { main: new File([main], base + ext, { type: main.type }), thumb: new File([thumb], base + '-s' + ext, { type: thumb.type }) };
 }
 async function uploadImage() {
-  const file = document.getElementById('img-file').files[0];
-  if (!file) return toast('Choose an image first');
-  const fd = new FormData();
-  fd.append('image', file);
+  const files = [...document.getElementById('img-file').files];
+  if (!files.length) return toast('Choose an image first');
+  const btn = document.querySelector('#img-overlay .btn-primary'); btn.disabled = true;
   try {
-    const res = await fetch(`/api/admin/products/${imgTargetId}/image`, { method: 'POST', body: fd });
-    const updated = await res.json();
-    if (!res.ok) throw new Error(updated.error || 'Upload failed');
-    PRODUCTS = PRODUCTS.map(p => p.id === updated.id ? updated : p);
-    renderImgGallery();
-    renderProducts();
+    for (let i = 0; i < files.length; i++) {
+      const cur = PRODUCTS.find(x => x.id === imgTargetId);
+      if (((cur && cur.images) || []).filter(Boolean).length >= 5) { toast('Maximum 5 photos. Remove one first.'); break; }
+      toast(`Resizing and uploading ${i + 1} of ${files.length}...`);
+      const { main, thumb } = await prepPhoto(files[i]);
+      const fd = new FormData();
+      fd.append('image', main); fd.append('thumb', thumb);
+      const res = await fetch(`/api/admin/products/${imgTargetId}/image`, { method: 'POST', body: fd });
+      const updated = await res.json();
+      if (!res.ok) throw new Error(updated.error || 'Upload failed');
+      PRODUCTS = PRODUCTS.map(p => p.id === updated.id ? updated : p);
+      renderImgGallery(); renderProducts();
+    }
     document.getElementById('img-file').value = '';
-    toast('Photo added');
+    toast('Photo(s) added');
+  } catch (e) { toast(e.message); }
+  btn.disabled = false;
+}
+async function makeMainImage(url) {
+  try {
+    const res = await fetch(`/api/admin/products/${imgTargetId}/image/main`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url })
+    });
+    const updated = await res.json();
+    if (!res.ok) throw new Error(updated.error || 'Failed');
+    PRODUCTS = PRODUCTS.map(p => p.id === updated.id ? updated : p);
+    renderImgGallery(); renderProducts(); toast('Main photo changed');
   } catch (e) { toast(e.message); }
 }
 async function removeProductImage(url) {
@@ -423,16 +472,24 @@ async function removeProductImage(url) {
 }
 
 async function uploadBulkImages() {
-  const files = document.getElementById('bulk-image-files').files;
+  const files = [...document.getElementById('bulk-image-files').files];
   if (!files.length) return toast('Choose some photos first');
-  const fd = new FormData();
-  [...files].forEach(f => fd.append('images', f));
   const resultsEl = document.getElementById('bulk-image-results');
-  resultsEl.innerHTML = `<span class="helper">Uploading &amp; matching ${files.length} photo(s)…</span>`;
   try {
-    const res = await fetch('/api/admin/products/bulk-images', { method: 'POST', body: fd });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Upload failed');
+    // Each photo is resized first, then sent in small batches (the host limits request size).
+    const data = { results: [], matched: 0, total: 0 };
+    for (let i = 0; i < files.length; i += 6) {
+      resultsEl.innerHTML = `<span class="helper">Resizing, uploading &amp; matching photos ${i + 1} to ${Math.min(i + 6, files.length)} of ${files.length}…</span>`;
+      const fd = new FormData();
+      for (const f of files.slice(i, i + 6)) {
+        const { main, thumb } = await prepPhoto(f);
+        fd.append('images', main); fd.append('thumbs', thumb);
+      }
+      const res = await fetch('/api/admin/products/bulk-images', { method: 'POST', body: fd });
+      const part = await res.json();
+      if (!res.ok) throw new Error(part.error || 'Upload failed');
+      data.results.push(...part.results); data.matched += part.matched; data.total += part.total;
+    }
     resultsEl.innerHTML = `
       <div class="helper" style="margin-bottom:8px;"><b style="color:var(--text)">${data.matched} of ${data.total}</b> matched and added.</div>
       <table class="table"><thead><tr><th>File</th><th>Result</th></tr></thead><tbody>

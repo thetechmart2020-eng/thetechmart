@@ -52,13 +52,14 @@
   function render() {
     var p = product, sold = T.isSold(p), g = T.gradeBadge(p);
     var cardLive = providers.some(function (x) { return x.key === 'yoco' && x.live; });
+    var FEE = T.deliveryFee;   // flat Courier Guy fee; the server recalculates and saves the real total
     $('co-root').innerHTML =
       '<form class="co" id="co-form" novalidate>' +
         '<div style="display:grid;gap:18px">' +
           '<section class="box"><h2>Delivery</h2>' +
             '<div class="choice" id="ful">' +
-              '<label><input type="radio" name="fulfillmentMethod" value="delivery" checked><span>Courier Guy delivery<small>2-day delivery to your South African address</small></span></label>' +
-              '<label><input type="radio" name="fulfillmentMethod" value="collection"><span>Collection<small>Arranged with us on WhatsApp</small></span></label>' +
+              '<label><input type="radio" name="fulfillmentMethod" value="delivery" checked><span>Courier Guy delivery: ' + T.money(FEE) + ' flat<small>The Courier Guy, about 2 days, to your South African address</small></span></label>' +
+              '<label><input type="radio" name="fulfillmentMethod" value="collection"><span>Collection: R0<small>Arranged with us on WhatsApp</small></span></label>' +
             '</div>' +
             '<div id="addr" style="margin-top:16px">' +
               '<div class="field"><label for="c-line1">Street address</label><input id="c-line1" name="line1" autocomplete="address-line1" placeholder="Street and number, unit or complex"></div>' +
@@ -77,9 +78,11 @@
           '</section>' +
           '<section class="box"><h2>How would you like to pay?</h2>' +
             '<div class="choice">' +
-              '<label><input type="radio" name="pay" value="card" checked><span>Card (via Yoco)<small>' + (cardLive ? 'You will be taken to a secure payment page' : 'We send you a secure payment link on WhatsApp') + '</small></span></label>' +
-              '<label><input type="radio" name="pay" value="eft"><span>EFT / bank transfer<small>We send our bank details on WhatsApp</small></span></label>' +
-              '<label><input type="radio" name="pay" value="cash"><span>Cash on collection<small>Pay when you collect (arranged on WhatsApp)</small></span></label>' +
+              (cardLive
+                ? '<label><input type="radio" name="pay" value="card" checked><span>Yoco (card)<small>You are taken to a secure Yoco payment page for the total</small></span></label>'
+                : '<label style="opacity:.55;cursor:not-allowed"><input type="radio" name="pay" value="card" disabled><span>Yoco (card)<small>Not available yet</small></span></label>') +
+              '<label><input type="radio" name="pay" value="eft"' + (cardLive ? '' : ' checked') + '><span>EFT<small>We send our bank details on WhatsApp</small></span></label>' +
+              '<label id="cash-opt"><input type="radio" name="pay" value="cash"><span>Cash<small>Only with collection, arranged on WhatsApp</small></span></label>' +
             '</div>' +
           '</section>' +
         '</div>' +
@@ -88,29 +91,37 @@
             '<strong>' + T.esc(p.brand + ' ' + p.model) + '</strong><div class="card-sub">' + T.esc([p.storage, p.color].filter(Boolean).join(' · ')) + '</div>' +
             '<div class="badges" style="margin-top:6px"><span class="badge ' + g.cls + '">' + T.esc(g.text) + '</span><span class="badge badge-warranty">' + T.esc(T.warrantyBadge(p)) + '</span></div></div></div>' +
           (sold ? '<p class="stock low" style="margin-top:12px">This device is currently out of stock. You can still order it as a pre-order and we will confirm availability on WhatsApp.</p>' : '') +
-          '<div class="totals"><div><span>Device</span><span>' + T.money(p.price) + '</span></div>' +
-            '<div id="del-row"><span>Delivery (The Courier Guy)</span><span><span class="placeholder">[PLACEHOLDER: fee confirmed on WhatsApp]</span></span></div>' +
-            '<div class="total"><span>Total</span><span>' + T.money(p.price) + '</span></div></div>' +
+          '<div class="totals"><div><span>Device price</span><span>' + T.money(p.price) + '</span></div>' +
+            '<div><span id="del-label">Delivery (The Courier Guy, about 2 days)</span><span id="del-amt">' + T.money(FEE) + '</span></div>' +
+            '<div class="total"><span>Total</span><span id="total-amt">' + T.money(p.price + FEE) + '</span></div></div>' +
           '<button class="btn btn-primary btn-block" type="submit" data-ch="whatsapp" style="margin-top:18px">Place order and continue on WhatsApp</button>' +
           '<button class="btn btn-ghost btn-block" type="submit" data-ch="email" style="margin-top:10px">Place order by email</button>' +
           '<p class="err" id="co-err" role="alert"></p>' +
-          '<p class="card-sub" style="margin-top:12px">Placing the order saves it with us and opens WhatsApp (or your email) with the details filled in. Just press send.</p>' +
+          '<p class="card-sub" style="margin-top:12px">' + (cardLive ? 'Card payments are taken securely by Yoco. ' : '') + 'Placing the order saves it with us and opens WhatsApp (or your email) with the details filled in. Just press send.</p>' +
         '</aside>' +
       '</form>';
 
     var form = $('co-form'), channel = 'whatsapp';
     form.querySelectorAll('button[type=submit]').forEach(function (b) { b.addEventListener('click', function () { channel = b.dataset.ch; }); });
 
+    // Collection: no address, delivery R0, cash allowed. Delivery: address, +flat fee, no cash.
     function syncFulfil() {
-      var col = form.fulfillmentMethod.value === 'collection';
-      $('addr').hidden = col; $('del-row').hidden = col;
+      var col = form.fulfillmentMethod.value === 'collection', fee = col ? 0 : FEE;
+      $('addr').hidden = col;
+      $('del-label').textContent = col ? 'Collection' : 'Delivery (The Courier Guy, about 2 days)';
+      $('del-amt').textContent = T.money(fee);
+      $('total-amt').textContent = T.money(p.price + fee);
+      $('cash-opt').hidden = !col;
+      if (!col && form.pay.value === 'cash') { var f = form.querySelector('input[name=pay]:not([disabled]):not([value=cash])'); if (f) f.checked = true; }
     }
-    form.addEventListener('change', function (e) {
-      // Cash on collection only makes sense with collection
-      if (e.target.name === 'pay' && e.target.value === 'cash') form.querySelector('input[name=fulfillmentMethod][value=collection]').checked = true;
-      if (e.target.name === 'fulfillmentMethod' && e.target.value === 'delivery' && form.pay.value === 'cash') form.querySelector('input[name=pay][value=card]').checked = true;
-      syncFulfil();
-    });
+    // Card (Yoco) goes straight to the Yoco page; EFT/cash hand off to WhatsApp or email.
+    function syncPay() {
+      var card = form.pay.value === 'card';
+      form.querySelector('button[data-ch=whatsapp]').textContent = card ? 'Place order and pay with Yoco' : 'Place order and continue on WhatsApp';
+      form.querySelector('button[data-ch=email]').hidden = card;
+    }
+    form.addEventListener('change', function () { syncFulfil(); syncPay(); });
+    syncPay();
     syncFulfil();
 
     form.addEventListener('submit', async function (e) {
@@ -147,7 +158,7 @@
     var url = channel === 'email' ? r.mailtoUrl : r.whatsappUrl, ref = r.order.id.slice(0, 8);
     $('co-root').innerHTML =
       '<div class="box ok-box"><div class="tick">' + T.I.tick + '</div><h1>Order placed</h1>' +
-      '<p>Thank you. Your order reference is <strong>' + T.esc(ref) + '</strong>. ' + (r.preOrder ? 'This device is a pre-order, so we will confirm availability with you. ' : '') +
+      '<p>Thank you. Your order reference is <strong>' + T.esc(ref) + '</strong>. Total: <strong>' + T.money(r.total) + '</strong> (' + (r.deliveryFee ? 'device plus ' + T.money(r.deliveryFee) + ' delivery' : 'collection, no delivery fee') + '). ' + (r.preOrder ? 'This device is a pre-order, so we will confirm availability with you. ' : '') +
       'Press send in ' + (channel === 'email' ? 'your email app' : 'WhatsApp') + ' so we can confirm payment and delivery.</p>' +
       '<a class="btn btn-primary btn-block" id="open-ch" data-custom ' + (channel === 'email' ? '' : 'data-wa target="_blank" rel="noopener"') + ' href="' + T.esc(url) + '">' + (channel === 'email' ? 'Open email' : 'Open WhatsApp') + '</a>' +
       '<p style="margin-top:14px"><a class="link-arrow" href="/">Back to the shop</a></p></div>';
