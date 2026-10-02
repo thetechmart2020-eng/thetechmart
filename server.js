@@ -10,10 +10,15 @@ const db = require('./db');
 const { uploadBuffer } = require('./lib/storage');
 const { setAdminCookie, clearAdminCookie, isAdminRequest } = require('./lib/auth');
 const payments = require('./lib/payments');
-const { generateQuotePdf, generateInvoicePdf } = require('./lib/documents');
+const { generateQuotePdf, generateInvoicePdf, generatePriceListPdf } = require('./lib/documents');
+const deals = require('./lib/deals');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Behind Vercel's proxy: lets req.protocol be 'https' (needed for correct share links,
+// canonical URLs and the sitemap).
+app.set('trust proxy', true);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -49,6 +54,44 @@ function toIntlPhone(phone) {
   if (!digits) return '';
   if (digits.startsWith('0')) return '27' + digits.slice(1);
   return digits;
+}
+
+// Tells Vercel's edge network it may serve a stored copy of this response for `s`
+// seconds, and keep serving a slightly stale copy for up to `swr` seconds while it
+// refreshes in the background. This is what makes repeat page loads feel instant
+// instead of waiting on the database every time.
+function edgeCache(res, s = 30, swr = 600) {
+  res.set('Cache-Control', `public, max-age=0, s-maxage=${s}, stale-while-revalidate=${swr}`);
+}
+
+// "27716623565" -> "071 662 3565" (for display on the site and in the price list PDF)
+function waDisplay(number) {
+  const d = String(number || '').replace(/\D/g, '');
+  if (d.startsWith('27') && d.length === 11) {
+    const l = '0' + d.slice(2);
+    return `${l.slice(0, 3)} ${l.slice(3, 6)} ${l.slice(6)}`;
+  }
+  return d;
+}
+
+// Public shape of a product (adds the "special offer" flag used for the 21-day warranty badge).
+function publicProduct(p) {
+  return { ...p, deal: deals.isDeal(p) };
+}
+
+// Only what the browser needs to draw a product card (keeps the page payload small).
+function cardProduct(p) {
+  return {
+    id: p.id, brand: p.brand, model: p.model, category: p.category, price: p.price, condition: p.condition,
+    storage: p.storage, color: p.color, stock: p.stock, imageUrl: p.imageUrl || null, deal: deals.isDeal(p)
+  };
+}
+
+function publicConfig(cfg) {
+  return {
+    storeName: cfg.storeName, whatsapp: cfg.whatsappNumber, whatsappDisplay: waDisplay(cfg.whatsappNumber),
+    email: cfg.contactEmail
+  };
 }
 
 // ---------- Bulk photo matching (filename → product) ----------
@@ -98,6 +141,7 @@ function asyncRoute(fn) {
 
 app.get('/api/config', asyncRoute(async (req, res) => {
   const cfg = await db.getConfig();
+  edgeCache(res, 60, 600);
   res.json({
     storeName: cfg.storeName,
     whatsappNumber: cfg.whatsappNumber,
@@ -121,20 +165,27 @@ app.get('/api/products', asyncRoute(async (req, res) => {
   if (sort === 'price_asc') list = [...list].sort((a, b) => a.price - b.price);
   if (sort === 'price_desc') list = [...list].sort((a, b) => b.price - a.price);
   if (sort === 'newest') list = [...list].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  res.json(list);
+  edgeCache(res, 30, 600);
+  res.json(list.map(publicProduct));
 }));
 
 app.get('/api/products/:id', asyncRoute(async (req, res) => {
   const p = await db.getProduct(req.params.id);
   if (!p) return res.status(404).json({ error: 'Not found' });
-  res.json(p);
+  edgeCache(res, 15, 120);
+  res.json(publicProduct(p));
 }));
 
 app.post('/api/track', asyncRoute(async (req, res) => {
   const { type, path: p, productId } = req.body;
-  const allowed = ['page_view', 'product_view', 'offer_submitted', 'tradein_submitted'];
+  // Browser-reported events. offer_submitted, tradein_submitted and order_completed are
+  // also logged server-side when the real submission succeeds.
+  const allowed = [
+    'page_view', 'product_view', 'offer_submitted', 'tradein_submitted',
+    'whatsapp_click', 'buy_now_click', 'checkout_started', 'order_completed', 'pricelist_download'
+  ];
   if (!allowed.includes(type)) return res.status(400).json({ error: 'Invalid event type' });
-  await db.logEvent({ type, path: p, productId });
+  await db.logEvent({ type, path: typeof p === 'string' ? p.slice(0, 120) : undefined, productId });
   res.json({ ok: true });
 }));
 
@@ -194,7 +245,7 @@ app.post('/api/tradeins', tradeinUpload.array('photos', 6), asyncRoute(async (re
 // WhatsApp or email to confirm payment/delivery — same conversational flow the
 // business already runs on WhatsApp today.
 app.post('/api/checkout', asyncRoute(async (req, res) => {
-  const { productId, name, email, phone, address, fulfillmentMethod, paymentMethod, notes } = req.body;
+  const { productId, name, email, phone, address, fulfillmentMethod, paymentMethod, paymentPreference, notes } = req.body;
   if (!name || !phone || !email) return res.status(400).json({ error: 'Name, email and phone are required' });
 
   const product = await db.getProduct(productId);
@@ -224,8 +275,11 @@ app.post('/api/checkout', asyncRoute(async (req, res) => {
     deliveryAddress: method === 'delivery' ? address : {}, fulfillmentMethod: method,
     courier: 'Courier Guy', paymentMethod: wantsGateway ? paymentMethod : 'manual',
     paymentStatus: 'pending', amount: product.price,
-    notes: (isPreOrder ? '[PRE-ORDER — source from supplier before dispatch] ' : '') + (notes || '')
+    notes: (isPreOrder ? '[PRE-ORDER — source from supplier before dispatch] ' : '')
+      + (['card', 'eft', 'cash'].includes(paymentPreference) ? `[Payment preference: ${paymentPreference.toUpperCase()}] ` : '')
+      + (notes || '')
   });
+  await db.logEvent({ type: 'order_completed', productId: product.id }).catch(() => {});
 
   // Reserve a unit against this listing (floor 0) so the storefront reflects
   // it immediately — same "one unit off stock" rule as accepting an offer.
@@ -233,7 +287,7 @@ app.post('/api/checkout', asyncRoute(async (req, res) => {
 
   const addressLine = method === 'delivery'
     ? `${address.line1}${address.line2 ? ', ' + address.line2 : ''}, ${address.city}, ${address.postalCode}${address.province ? ', ' + address.province : ''}`
-    : 'Collecting in-store';
+    : 'Collection (arranged on WhatsApp)';
 
   if (wantsGateway) {
     try {
@@ -247,7 +301,8 @@ app.post('/api/checkout', asyncRoute(async (req, res) => {
     }
   }
 
-  const summary = `Hi TheTechMart! I'd like to buy this device.\n\nDevice: ${product.brand} ${product.model}${product.storage ? ' · ' + product.storage : ''}\nPrice: R${product.price}\nName: ${name}\nEmail: ${email}\nContact: ${phone}\nFulfillment: ${method === 'delivery' ? 'Courier Guy delivery to ' + addressLine : 'In-store collection'}\n${notes ? 'Notes: ' + notes : ''}\n\n(Order ref: ${order.id.slice(0, 8)})`;
+  const prefLabel = { card: 'Card', eft: 'EFT / bank transfer', cash: 'Cash on collection' }[paymentPreference] || '';
+  const summary = `Hi TheTechMart! I'd like to buy this device.\n\nDevice: ${product.brand} ${product.model}${product.storage ? ' · ' + product.storage : ''}\nPrice: R${product.price}\nName: ${name}\nEmail: ${email}\nContact: ${phone}\nFulfillment: ${method === 'delivery' ? 'Courier Guy delivery to ' + addressLine : 'Collection (arranged on WhatsApp)'}\n${prefLabel ? 'Payment: ' + prefLabel + '\n' : ''}${isPreOrder ? 'Pre-order: yes\n' : ''}${notes ? 'Notes: ' + notes : ''}\n\n(Order ref: ${order.id.slice(0, 8)})`;
 
   res.json({
     order,
@@ -576,7 +631,7 @@ app.post('/api/admin/orders/:id/invoice', requireAdmin, asyncRoute(async (req, r
     customer: { name: order.customerName, phone: order.customerPhone, email: order.customerEmail, address: addressLine },
     items: [{ label: product ? `${product.brand} ${product.model}` : (order.notes || 'Device'), amount: order.amount }],
     paymentStatus: order.paymentStatus, paymentMethod: order.paymentMethod,
-    fulfillment: order.fulfillmentMethod === 'collection' ? 'In-store collection' : `${order.courier || 'Courier Guy'} delivery${addressLine ? ' — ' + addressLine : ''}`,
+    fulfillment: order.fulfillmentMethod === 'collection' ? 'Collection' : `${order.courier || 'Courier Guy'} delivery${addressLine ? ' — ' + addressLine : ''}`,
     note: order.notes || ''
   });
   const url = await uploadBuffer('documents', { buffer: pdf, mimetype: 'application/pdf', originalname: `${number}.pdf` });
@@ -619,61 +674,243 @@ app.put('/api/admin/config/payments/:key', requireAdmin, asyncRoute(async (req, 
   res.json({ ...updated, paymentProviders: payments.listProviders(updated.paymentSettings) });
 }));
 
-// ================= WHATSAPP BOT =================
-
 // ================= PAGES =================
+//
+// Public pages are assembled on the server and cached at Vercel's edge, with the data
+// they need (products, config) already embedded in the HTML as window.__BOOT__. That
+// means the browser has nothing to wait for before it can draw the page: no second
+// round trip to the API, no blank "Loading..." state, and repeat visitors are served
+// from the edge network instead of the database.
+
+const VIEWS_DIR = path.join(__dirname, 'views');
+const rawCache = new Map();
+function readView(name) {
+  if (!rawCache.has(name)) rawCache.set(name, fs.readFileSync(path.join(VIEWS_DIR, name), 'utf-8'));
+  return rawCache.get(name);
+}
+
+function siteBase(req) {
+  return (process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`).replace(/\/+$/, '');
+}
+
+function absUrl(base, u) {
+  if (!u) return `${base}/img/logo.png`;
+  return /^https?:\/\//i.test(u) ? u : `${base}${u.startsWith('/') ? '' : '/'}${u}`;
+}
+
+function fmtR(n) { return 'R' + String(Math.round(Number(n))).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); }
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+// JSON that is safe to place inside a <script> tag.
+function safeJson(obj) {
+  return JSON.stringify(obj).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+}
+
+// Fills a view template. {{KEY}} tokens are HTML-escaped; JSON-LD and boot data are inserted raw.
+function renderView(name, { title, description, canonical, ogImage, ogType = 'website', noindex = false, jsonld, boot } = {}, base = '') {
+  let html = readView(name)
+    .replace('<!--HEADER-->', readView('partials/header.html'))
+    .replace('<!--FOOTER-->', readView('partials/footer.html'));
+  const tokens = {
+    TITLE: title || 'TheTechMart | the #1 electronics market',
+    DESCRIPTION: description || 'Quality-checked pre-owned phones and electronics with a 3-month warranty and 2-day Courier Guy delivery.',
+    CANONICAL: canonical || base || '',
+    OGIMAGE: ogImage || (base ? `${base}/img/logo.png` : '/img/logo.png'),
+    OGTYPE: ogType
+  };
+  for (const [k, v] of Object.entries(tokens)) html = html.split(`{{${k}}}`).join(escapeHtml(v));
+  html = html.replace('<!--ROBOTS-->', noindex ? '<meta name="robots" content="noindex">' : '');
+  html = html.replace('<!--JSONLD-->', (jsonld || []).map((j) => `<script type="application/ld+json">${safeJson(j)}</script>`).join('\n'));
+  html = html.replace('<!--BOOT-->', `<script>window.__BOOT__=${safeJson(boot || null)};</script>`);
+  return html;
+}
 
 app.get('/sitemap.xml', asyncRoute(async (req, res) => {
-  const base = `${req.protocol}://${req.get('host')}`;
+  const base = siteBase(req);
   const products = await db.listProducts({ activeOnly: true });
   const staticUrls = ['', '/sell'];
   const urls = [
     ...staticUrls.map((p) => `<url><loc>${base}${p}</loc><changefreq>daily</changefreq></url>`),
     ...products.map((p) => `<url><loc>${base}/product?id=${p.id}</loc><changefreq>weekly</changefreq></url>`)
   ];
+  edgeCache(res, 300, 3600);
   res.set('Content-Type', 'application/xml');
   res.send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join('\n')}\n</urlset>`);
 }));
 
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'views/index.html')));
-
-// Server-rendered so shared links (WhatsApp, Facebook, Google) show the right
-// device name/price/photo instead of generic "TheTechMart" text for every link.
-app.get('/product', asyncRoute(async (req, res) => {
-  const id = req.query.id;
-  const template = fs.readFileSync(path.join(__dirname, 'views/product.html'), 'utf-8');
-  const product = id ? await db.getProduct(id).catch(() => null) : null;
-
-  const title = product ? `${product.brand} ${product.model} — ${fmtR(product.price)} | TheTechMart` : 'Device — TheTechMart';
-  const description = product
-    ? `${product.brand} ${product.model}${product.storage ? ' · ' + product.storage : ''} — ${product.condition}, listed at ${fmtR(product.price)} and negotiable. Message us on WhatsApp to make an offer.`
-    : 'Browse negotiable phone deals at TheTechMart.';
-  const image = product && product.imageUrl ? `${req.protocol}://${req.get('host')}${product.imageUrl}` : `${req.protocol}://${req.get('host')}/img/logo.png`;
-  const url = `${req.protocol}://${req.get('host')}${req.originalUrl}`;
-
-  const html = template
-    .replace('<title>Device — TheTechMart</title>', `<title>${escapeHtml(title)}</title>
-<meta name="description" content="${escapeHtml(description)}">
-<meta property="og:title" content="${escapeHtml(title)}">
-<meta property="og:description" content="${escapeHtml(description)}">
-<meta property="og:image" content="${escapeHtml(image)}">
-<meta property="og:url" content="${escapeHtml(url)}">
-<meta property="og:type" content="product">
-<meta name="twitter:card" content="summary_large_image">`);
-
-  res.send(html);
+// Homepage: the whole live catalogue is embedded so shop, categories and the October
+// deals draw instantly with no extra requests.
+app.get('/', asyncRoute(async (req, res) => {
+  const base = siteBase(req);
+  let boot = null;
+  try {
+    const [products, cfg] = await Promise.all([db.listProducts({ activeOnly: true }), db.getConfig()]);
+    boot = {
+      cfg: publicConfig(cfg),
+      products: products.map(cardProduct),
+      dealIds: deals.pickDeals(products).map((p) => p.id)
+    };
+  } catch (err) {
+    // Database hiccup: still serve the page; the browser falls back to /api/products.
+    console.error('[home] boot data unavailable:', err.message);
+  }
+  if (boot) edgeCache(res, 30, 600);
+  res.send(renderView('index.html', {
+    title: 'TheTechMart | Quality-checked phones & tech, 3-month warranty, 2-day delivery',
+    description: 'Shop Grade A-B pre-owned phones, laptops and consoles with a 3-month warranty and 2-day Courier Guy delivery. Make an offer, trade in your device, or earn R300 per referral.',
+    canonical: `${base}/`,
+    jsonld: [
+      {
+        '@context': 'https://schema.org', '@type': 'ElectronicsStore', name: 'TheTechMart', url: `${base}/`,
+        description: 'the #1 electronics market', image: `${base}/img/logo.png`,
+        telephone: '+27716623565', areaServed: 'ZA', sameAs: ['https://instagram.com/the_tech_mart']
+      },
+      {
+        '@context': 'https://schema.org', '@type': 'FAQPage',
+        mainEntity: [
+          ['What warranty do I get?', 'Every device comes with a 3-month warranty. Special offers carry a 21-day warranty.'],
+          ['What condition are the devices in?', 'Our devices are Grade A-B pre-owned and quality checked.'],
+          ['How long does delivery take?', 'Delivery takes 2 days via The Courier Guy.'],
+          ['Can I make an offer on a price?', 'Yes. Use "Make an offer" on any device and we reply on WhatsApp.'],
+          ['Do you buy or trade in devices?', 'Yes. Send us the details and photos of your device through the Sell / Trade-in form and we reply on WhatsApp.']
+        ].map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } }))
+      }
+    ],
+    boot
+  }, base));
 }));
 
-function fmtR(n) { return 'R' + Number(n).toLocaleString('en-ZA'); }
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}
+// Product page: this device (and a few similar ones) are embedded in the HTML, plus
+// share-link tags and Product structured data for Google.
+app.get('/product', asyncRoute(async (req, res) => {
+  const id = req.query.id;
+  const base = siteBase(req);
+  let product = null;
+  let similar = [];
+  let cfg = null;
+  try {
+    const [p, all, c] = await Promise.all([
+      id ? db.getProduct(id).catch(() => null) : null,
+      db.listProducts({ activeOnly: true }),
+      db.getConfig()
+    ]);
+    product = p;
+    cfg = c;
+    if (product) {
+      similar = all
+        .filter((x) => x.id !== product.id && x.category === product.category)
+        .sort((a, b) => Math.abs(a.price - product.price) - Math.abs(b.price - product.price))
+        .slice(0, 4).map(cardProduct);
+    }
+  } catch (err) {
+    console.error('[product] boot data unavailable:', err.message);
+  }
 
-app.get('/checkout', (req, res) => res.sendFile(path.join(__dirname, 'views/checkout.html')));
-app.get('/checkout/complete', (req, res) => res.sendFile(path.join(__dirname, 'views/checkout-complete.html')));
-app.get('/sell', (req, res) => res.sendFile(path.join(__dirname, 'views/sell.html')));
+  if (!product) {
+    // Unknown id, or a database hiccup: let the browser try the API before giving up.
+    return res.status(id && cfg ? 404 : 200).send(renderView('product.html', {
+      title: 'Device | TheTechMart', canonical: `${base}/product`, noindex: true, boot: { product: null, id: id || null, cfg: cfg ? publicConfig(cfg) : null }
+    }, base));
+  }
+
+  const pub = publicProduct(product);
+  const name = `${product.brand} ${product.model}`;
+  const preOrder = product.stock < 1;
+  const url = `${base}/product?id=${product.id}`;
+  const image = absUrl(base, product.imageUrl);
+  const description = `${name}${product.storage ? ' ' + product.storage : ''}, ${product.condition}, ${fmtR(product.price)}. ${pub.deal ? '21-day warranty (special offer)' : '3-month warranty'}, 2-day Courier Guy delivery. Buy now or make an offer.`;
+
+  edgeCache(res, 30, 600);
+  res.send(renderView('product.html', {
+    title: `${name}${product.storage ? ' ' + product.storage : ''} ${fmtR(product.price)} | TheTechMart`,
+    description, canonical: url, ogImage: image, ogType: 'product',
+    jsonld: [
+      {
+        '@context': 'https://schema.org', '@type': 'Product', name, sku: product.id,
+        brand: { '@type': 'Brand', name: product.brand }, category: product.category,
+        image: [image], description,
+        itemCondition: product.condition === 'New' ? 'https://schema.org/NewCondition' : 'https://schema.org/UsedCondition',
+        offers: {
+          '@type': 'Offer', url, priceCurrency: 'ZAR', price: String(product.price),
+          availability: preOrder ? 'https://schema.org/PreOrder' : 'https://schema.org/InStock',
+          itemCondition: product.condition === 'New' ? 'https://schema.org/NewCondition' : 'https://schema.org/UsedCondition',
+          seller: { '@type': 'Organization', name: 'TheTechMart' }
+        }
+      },
+      {
+        '@context': 'https://schema.org', '@type': 'BreadcrumbList',
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: 'Shop', item: `${base}/` },
+          { '@type': 'ListItem', position: 2, name: product.category, item: `${base}/?category=${encodeURIComponent(product.category)}` },
+          { '@type': 'ListItem', position: 3, name, item: url }
+        ]
+      }
+    ],
+    boot: { product: pub, similar, cfg: publicConfig(cfg) }
+  }, base));
+}));
+
+// Checkout: the device and the payment options are embedded, so the form appears
+// immediately (the old checkout fetched them after load and showed an empty page
+// until the server answered).
+app.get('/checkout', asyncRoute(async (req, res) => {
+  const id = req.query.id;
+  const base = siteBase(req);
+  let boot = { product: null, id: id || null, cfg: null, providers: [] };
+  try {
+    const [product, cfg] = await Promise.all([id ? db.getProduct(id).catch(() => null) : null, db.getConfig()]);
+    boot = {
+      product: product ? publicProduct(product) : null, id: id || null, cfg: publicConfig(cfg),
+      providers: payments.listProviders(cfg.paymentSettings).map(({ key, label, description, live }) => ({ key, label, description, live }))
+    };
+    if (product) edgeCache(res, 20, 120);
+  } catch (err) {
+    console.error('[checkout] boot data unavailable:', err.message);
+  }
+  res.send(renderView('checkout.html', { title: 'Checkout | TheTechMart', canonical: `${base}/checkout`, noindex: true, boot }, base));
+}));
+
+app.get('/checkout/complete', (req, res) => {
+  edgeCache(res, 300, 86400);
+  res.send(renderView('checkout-complete.html', { title: 'Order status | TheTechMart', noindex: true }, siteBase(req)));
+});
+
+app.get('/sell', asyncRoute(async (req, res) => {
+  const base = siteBase(req);
+  let boot = null;
+  try { boot = { cfg: publicConfig(await db.getConfig()) }; } catch (err) { console.error('[sell] config unavailable:', err.message); }
+  if (boot) edgeCache(res, 60, 3600);
+  res.send(renderView('sell.html', {
+    title: 'Sell or trade in your device | TheTechMart',
+    description: 'Sell your phone or trade it in at TheTechMart. Tell us about your device, add photos, and we reply on WhatsApp with an offer.',
+    canonical: `${base}/sell`, boot
+  }, base));
+}));
+
+// Downloadable price list, generated from the live catalogue so it always matches the site.
+app.get('/price-list.pdf', asyncRoute(async (req, res) => {
+  const [products, cfg] = await Promise.all([db.listProducts({ activeOnly: true }), db.getConfig()]);
+  const pdf = await generatePriceListPdf({
+    products, cfg: { ...cfg, whatsappDisplay: waDisplay(cfg.whatsappNumber) }, isDeal: deals.isDeal
+  });
+  edgeCache(res, 300, 3600);
+  res.set({
+    'Content-Type': 'application/pdf',
+    'Content-Disposition': 'attachment; filename="TheTechMart-Price-List.pdf"',
+    'Content-Length': pdf.length
+  });
+  res.send(pdf);
+}));
+
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'views/admin/login.html')));
 app.get('/admin/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'views/admin/dashboard.html')));
+
+// Anything else: a friendly page instead of Express's bare "Cannot GET".
+app.use((req, res) => {
+  if (req.path.startsWith('/api/')) return res.status(404).json({ error: 'Not found' });
+  res.status(404).send(renderView('404.html', { title: 'Page not found | TheTechMart', noindex: true }, siteBase(req)));
+});
 
 if (require.main === module) {
   app.listen(PORT, () => console.log(`TheTechMart running at http://localhost:${PORT}`));

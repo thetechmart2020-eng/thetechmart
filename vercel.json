@@ -1,10 +1,16 @@
 {
+  "regions": [
+    "sin1"
+  ],
   "functions": {
     "api/index.js": {
       "includeFiles": "{views/**,node_modules/pdfkit/js/standard-fonts/**,node_modules/pdfkit/js/data/**}"
     }
   },
   "rewrites": [
-    { "source": "/(.*)", "destination": "/api/index.js" }
+    {
+      "source": "/(.*)",
+      "destination": "/api/index.js"
+    }
   ]
 }

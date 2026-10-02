@@ -2,174 +2,197 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Device — TheTechMart</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{TITLE}}</title>
+<meta name="description" content="{{DESCRIPTION}}">
+<link rel="canonical" href="{{CANONICAL}}">
+<meta property="og:title" content="{{TITLE}}">
+<meta property="og:description" content="{{DESCRIPTION}}">
+<meta property="og:type" content="{{OGTYPE}}">
+<meta property="og:url" content="{{CANONICAL}}">
+<meta property="og:image" content="{{OGIMAGE}}">
+<meta name="theme-color" content="#0a0b0c">
+<!--ROBOTS-->
 <link rel="icon" type="image/png" href="/img/favicon.png">
-<link rel="stylesheet" href="/css/style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap">
+<link rel="stylesheet" href="/css/site.css">
+<!--JSONLD-->
+<!--BOOT-->
 </head>
-<body>
+<body class="has-bar">
+<!--HEADER-->
+<main id="main" class="wrap">
+  <nav class="crumbs" aria-label="Breadcrumb"><a href="/">Shop</a> / <span id="crumb-cat"></span></nav>
 
-<nav class="nav">
-  <div class="wrap">
-    <a href="/" class="brand"><img class="logo-mark" src="/img/logo.png" alt="TheTechMart"></a>
-    <div class="nav-links">
-      <a href="/#shop">Shop</a>
-      <a href="/sell">Sell / Trade-in</a>
+  <!-- Skeleton shows only if the device data is not already embedded -->
+  <div id="content">
+    <div class="pd">
+      <div class="skel" style="aspect-ratio:1/1"></div>
+      <div><div class="skel" style="height:40px;width:80%"></div><div class="skel" style="height:44px;width:40%;margin-top:18px"></div><div class="skel" style="height:56px;margin-top:24px"></div></div>
     </div>
-    <a href="/sell" class="nav-cta">Get a quote</a>
   </div>
-</nav>
 
-<div class="wrap">
-  <div class="pd-grid" id="content">
-    <div class="empty">Loading…</div>
-  </div>
+  <section id="similar-wrap" hidden style="margin-top:20px">
+    <div class="section-head"><div><h2>Similar devices</h2></div></div>
+    <div class="grid" id="similar"></div>
+  </section>
+</main>
+<!--FOOTER-->
+
+<div class="sticky-bar" id="bar" role="region" aria-label="Quick actions" hidden>
+  <a class="btn btn-wa" id="bar-wa" data-wa data-custom href="https://wa.me/27716623565" target="_blank" rel="noopener">WhatsApp</a>
+  <a class="btn btn-primary" id="bar-buy" data-buy href="/checkout">Buy now</a>
 </div>
 
-<!-- Offer modal -->
-<div class="overlay" id="offer-overlay">
+<!-- Make an offer -->
+<div class="overlay" id="offer-overlay" role="dialog" aria-modal="true" aria-labelledby="offer-h">
   <div class="modal">
-    <div class="modal-inner">
-      <button class="modal-close" onclick="closeOffer()">&times;</button>
-      <h3>Make an offer</h3>
+    <button class="modal-close" id="offer-close" aria-label="Close">&times;</button>
+    <div id="offer-form-wrap">
+      <h3 id="offer-h">Make an offer</h3>
       <p class="sub" id="offer-sub"></p>
-      <form id="offer-form">
-        <div class="field">
-          <label>Your offer (ZAR)</label>
-          <input type="number" name="amount" required min="1" placeholder="e.g. 7500">
+      <form id="offer-form" novalidate>
+        <div class="field"><label for="o-amount">Your offer (R)</label><input id="o-amount" name="amount" type="number" inputmode="numeric" min="1" required></div>
+        <div class="row2">
+          <div class="field"><label for="o-name">Your name</label><input id="o-name" name="name" autocomplete="name" required></div>
+          <div class="field"><label for="o-phone">Phone (WhatsApp)</label><input id="o-phone" name="phone" type="tel" autocomplete="tel" placeholder="082 123 4567" required></div>
         </div>
-        <div class="field-row">
-          <div class="field">
-            <label>Your name</label>
-            <input type="text" name="name" required>
-          </div>
-          <div class="field">
-            <label>WhatsApp number</label>
-            <input type="tel" name="phone" required placeholder="e.g. 0821234567">
-          </div>
-        </div>
-        <div class="field">
-          <label>Email (optional — so we can send you a quote)</label>
-          <input type="email" name="email" placeholder="you@example.com">
-        </div>
-        <div class="field">
-          <label>Note (optional)</label>
-          <textarea name="message" placeholder="Anything we should know?"></textarea>
-        </div>
-        <div class="checkout-actions">
-          <button type="submit" data-channel="whatsapp" class="btn btn-primary btn-block">Send offer via WhatsApp</button>
-          <button type="submit" data-channel="email" class="btn btn-ghost btn-block" style="margin-top:10px;">Send offer via Email</button>
-        </div>
-        <p class="helper">We'll save your offer and open WhatsApp or your email app with it pre-filled — just hit send from there. We reply directly to accept, reject, or counter.</p>
+        <div class="field"><label for="o-msg">Note (optional)</label><textarea id="o-msg" name="message"></textarea></div>
+        <button type="submit" data-channel="whatsapp" class="btn btn-primary btn-block">Send offer on WhatsApp</button>
+        <button type="submit" data-channel="email" class="btn btn-ghost btn-block" style="margin-top:10px">Send offer by email</button>
+        <p class="err" id="offer-err" role="alert"></p>
       </form>
     </div>
+    <div id="offer-done" hidden class="ok-box" style="padding:10px 0">
+      <div class="tick" id="offer-tick"></div>
+      <h3>Offer saved</h3>
+      <p>Tap below if WhatsApp or your email app did not open. We reply to accept or counter.</p>
+      <a class="btn btn-primary btn-block" id="offer-open" href="#" target="_blank" rel="noopener">Open WhatsApp</a>
+    </div>
   </div>
 </div>
 
-<footer class="footer">
-  <div class="wrap">
-    <span>© TheTechMart — "the #1 electronics market"</span>
-    <div class="footer-links">
-      <a href="https://wa.me/27716623565" target="_blank" rel="noopener">WhatsApp</a>
-      <a href="mailto:thetechmart2020@gmail.com">Email</a>
-      <a href="https://instagram.com/the_tech_mart" target="_blank" rel="noopener">Instagram</a>
-      <a href="https://web.facebook.com/thulani.molefi/?_rdc=1&_rdr#" target="_blank" rel="noopener">Facebook</a>
-      <a href="https://x.com/TheTechMart3" target="_blank" rel="noopener">X</a>
-    </div>
-  </div>
-</footer>
-
-<script src="/js/common.js"></script>
+<script src="/js/site.js"></script>
 <script>
-const id = new URLSearchParams(location.search).get('id');
-let product = null;
+(function () {
+  var T = window.TTM, $ = function (id) { return document.getElementById(id); };
+  var product = null;
 
-async function load() {
-  try {
-    product = await api('/api/products/' + id);
-  } catch (e) {
-    document.getElementById('content').innerHTML = `<div class="empty" style="grid-column:1/-1">Couldn't find that device. <a href="/" style="color:var(--accent)">Back to shop</a></div>`;
-    return;
-  }
-  const gallery = (product.images && product.images.length) ? product.images : (product.imageUrl ? [product.imageUrl] : []);
-  const sold = product.sold || product.stock < 1;
+  function line(icon, text) { return '<li>' + T.I[icon] + '<span>' + text + '</span></li>'; }
 
-  document.getElementById('content').innerHTML = `
-    <div>
-      <div class="pd-img" id="pd-main-img">${gallery.length ? `<img src="${gallery[0]}" alt="${product.brand} ${product.model}">` : deviceArt(product.brand, product.model)}${sold ? '<span class="sold-badge">SOLD</span>' : ''}</div>
-      ${gallery.length > 1 ? `<div class="pd-thumbs">${gallery.map((src, i) => `<img src="${src}" data-i="${i}" class="${i === 0 ? 'active' : ''}">`).join('')}</div>` : ''}
-    </div>
-    <div>
-      <span class="pd-tag">${product.condition}</span>
-      <span class="pd-tag" style="margin-left:8px;color:var(--text-dim);border-color:var(--line);">${product.category || 'Phones'}</span>
-      <h1 class="pd-title">${product.brand} ${product.model}</h1>
-      <div class="pd-sub">${product.storage || ''}${product.storage && product.color ? ' · ' : ''}${product.color || ''}</div>
-      <div class="pd-price mono">${fmtPrice(product.price)}</div>
-      <div class="pd-price-lbl">${sold ? 'SOLD — CHECK BACK FOR RESTOCK' : 'LIST PRICE · NEGOTIABLE'}</div>
-      <div class="specs">
-        <div class="spec-row"><span class="k">Brand</span><span>${product.brand}</span></div>
-        <div class="spec-row"><span class="k">Model</span><span>${product.model}</span></div>
-        <div class="spec-row"><span class="k">Category</span><span>${product.category || 'Phones'}</span></div>
-        ${product.storage ? `<div class="spec-row"><span class="k">Storage</span><span>${product.storage}</span></div>` : ''}
-        ${product.color ? `<div class="spec-row"><span class="k">Color</span><span>${product.color}</span></div>` : ''}
-        <div class="spec-row"><span class="k">Condition</span><span>${product.condition}</span></div>
-        <div class="spec-row"><span class="k">In stock</span><span>${sold ? 'Sold out' : product.stock}</span></div>
-      </div>
-      ${sold ? `
-      <div class="pd-actions">
-        <a class="btn btn-ghost" href="/#shop" style="width:100%;">See what else is in stock</a>
-      </div>
-      ` : `
-      <div class="pd-actions">
-        <a class="btn btn-primary" href="/checkout?id=${product.id}">Buy now</a>
-        <button class="btn btn-ghost" onclick="openOffer()">Make an offer</button>
-      </div>
-      `}
-      <div class="pd-actions" style="margin-top:10px;">
-        <a class="btn btn-ghost" href="/sell" style="width:100%;">Trade this in instead</a>
-      </div>
-    </div>
-  `;
+  function render(p, similar) {
+    product = p;
+    var name = T.deviceName(p), sold = T.isSold(p), g = T.gradeBadge(p), st = T.stockLine(p);
+    var gallery = (p.images && p.images.length) ? p.images : (p.imageUrl ? [p.imageUrl] : []);
+    var wa = T.waLink('Hi TheTechMart, I am interested in the ' + name + ' (' + T.money(p.price) + '). Is it available?');
+    var ask = T.waLink('Hi TheTechMart, I have a question about the ' + name + '.');
+    $('crumb-cat').textContent = p.category || 'Phones';
+    document.title = name + ' ' + T.money(p.price) + ' | TheTechMart';
 
-  document.querySelectorAll('.pd-thumbs img').forEach((thumb) => {
-    thumb.addEventListener('click', () => {
-      document.querySelectorAll('.pd-thumbs img').forEach((t) => t.classList.remove('active'));
-      thumb.classList.add('active');
-      document.querySelector('#pd-main-img img').src = gallery[Number(thumb.dataset.i)];
+    var main = gallery.length
+      ? '<img id="main-img" src="' + T.esc(gallery[0]) + '" alt="' + T.esc(p.brand + ' ' + p.model) + '" width="800" height="800" fetchpriority="high" decoding="async">'
+      : '<div class="ph" role="img" aria-label="' + T.esc(name) + '">' + T.I[(T.CATS.find(function (c) { return c.name === p.category; }) || { icon: 'phone' }).icon] + '</div>';
+    var thumbs = gallery.length > 1 ? '<div class="thumbs">' + gallery.map(function (src, i) {
+      return '<button type="button" data-i="' + i + '" aria-label="Photo ' + (i + 1) + '" ' + (i === 0 ? 'aria-current="true"' : '') + '><img src="' + T.esc(src) + '" alt="" loading="lazy" width="64" height="64"></button>';
+    }).join('') + '</div>' : '';
+
+    var spec = function (k, v) { return v ? '<div><dt>' + k + '</dt><dd>' + T.esc(v) + '</dd></div>' : ''; };
+
+    $('content').innerHTML =
+      '<div class="pd"><div><div class="pd-img">' + main + '</div>' + thumbs + '</div>' +
+      '<div>' +
+        '<h1>' + T.esc(p.brand + ' ' + p.model) + '</h1>' +
+        '<p class="pd-sub">' + T.esc([p.storage, p.color].filter(Boolean).join(' · ')) + '</p>' +
+        '<div class="pd-price">' + T.money(p.price) + '</div>' +
+        '<div class="stock ' + st.cls + '">' + st.text + '</div>' +
+        '<div class="badges"><span class="badge ' + g.cls + '">' + T.esc(g.text) + '</span><span class="badge badge-warranty">' + T.esc(T.warrantyBadge(p)) + '</span><span class="badge">' + T.esc(p.condition) + '</span></div>' +
+        '<ul class="note-list">' +
+          line('truck', '2-day delivery via The Courier Guy') +
+          line('shield', p.deal ? '21-day warranty (special offer)' : '3-month warranty') +
+          line('tag', 'Not quite the right price? Make an offer.') +
+        '</ul>' +
+        '<div class="pd-actions">' + (sold
+          ? '<a class="btn btn-primary" data-wa data-custom data-product="' + p.id + '" href="' + wa + '" target="_blank" rel="noopener">WhatsApp to ask about restock</a>'
+          : '<a class="btn btn-primary" data-buy data-product="' + p.id + '" href="/checkout?id=' + encodeURIComponent(p.id) + '">Buy now</a>' +
+            '<button class="btn btn-ghost" type="button" id="offer-open-btn">Make an offer</button>' +
+            '<a class="btn btn-wa" data-wa data-custom data-product="' + p.id + '" href="' + ask + '" target="_blank" rel="noopener">WhatsApp to ask</a>') +
+        '</div>' +
+        '<dl class="specs">' + spec('Brand', p.brand) + spec('Model', p.model) + spec('Category', p.category) + spec('Storage', p.storage) + spec('Colour', p.color) + spec('Condition', p.condition) + '</dl>' +
+      '</div></div>';
+
+    // sticky bar
+    $('bar').hidden = false;
+    $('bar-wa').href = sold ? ask : wa; $('bar-wa').dataset.product = p.id;
+    if (sold) { $('bar').classList.add('single'); $('bar-buy').hidden = true; }
+    else { $('bar-buy').href = '/checkout?id=' + encodeURIComponent(p.id); $('bar-buy').dataset.product = p.id; }
+
+    document.querySelectorAll('.thumbs button').forEach(function (b) {
+      b.addEventListener('click', function () {
+        document.querySelectorAll('.thumbs button').forEach(function (x) { x.removeAttribute('aria-current'); });
+        b.setAttribute('aria-current', 'true'); $('main-img').src = gallery[Number(b.dataset.i)];
+      });
     });
-  });
-}
+    var ob = $('offer-open-btn'); if (ob) ob.addEventListener('click', openOffer);
 
-function openOffer() {
-  document.getElementById('offer-sub').textContent = `${product.brand} ${product.model} — listed at ${fmtPrice(product.price)}`;
-  document.getElementById('offer-overlay').classList.add('open');
-}
-function closeOffer() { document.getElementById('offer-overlay').classList.remove('open'); }
-
-let offerChannel = 'whatsapp';
-document.querySelectorAll('#offer-form button[type=submit]').forEach((btn) => {
-  btn.addEventListener('click', () => { offerChannel = btn.dataset.channel; });
-});
-
-document.getElementById('offer-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const fd = new FormData(e.target);
-  const body = { productId: id, amount: fd.get('amount'), name: fd.get('name'), phone: fd.get('phone'), email: fd.get('email'), message: fd.get('message') };
-  try {
-    const { whatsappUrl, mailtoUrl } = await api('/api/offers', { method: 'POST', body });
-    const url = offerChannel === 'email' ? mailtoUrl : whatsappUrl;
-    toast(offerChannel === 'email' ? 'Offer saved — opening your email app…' : 'Offer saved — opening WhatsApp…');
-    window.open(url, offerChannel === 'email' ? '_self' : '_blank');
-    closeOffer();
-    e.target.reset();
-  } catch (err) {
-    toast(err.message);
+    if (similar && similar.length) {
+      $('similar-wrap').hidden = false;
+      $('similar').innerHTML = similar.map(function (s) { return T.card(s); }).join('');
+    }
+    T.track('product_view', { productId: p.id });
+    if (location.hash === '#offer' && !sold) openOffer();
   }
-});
 
-load();
-api('/api/track', { method: 'POST', body: { type: 'page_view', path: '/product' } }).catch(() => {});
-if (id) api('/api/track', { method: 'POST', body: { type: 'product_view', productId: id } }).catch(() => {});
+  function notFound() {
+    $('content').innerHTML = '<div class="ok-box"><h1>We could not find that device</h1><p>It may have sold. Browse what is in stock or ask us on WhatsApp.</p><a class="btn btn-primary" href="/#shop">Shop devices</a></div>';
+  }
+
+  // ---- offer modal ----
+  var channel = 'whatsapp';
+  function openOffer() {
+    $('offer-sub').textContent = T.deviceName(product) + ' listed at ' + T.money(product.price);
+    $('offer-overlay').classList.add('open'); setTimeout(function () { if (!document.querySelector('#offer-form :focus')) $('o-amount').focus(); }, 50);
+  }
+  function closeOffer() { $('offer-overlay').classList.remove('open'); }
+  $('offer-close').addEventListener('click', closeOffer);
+  $('offer-overlay').addEventListener('click', function (e) { if (e.target === this) closeOffer(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeOffer(); });
+  document.querySelectorAll('#offer-form button[type=submit]').forEach(function (b) { b.addEventListener('click', function () { channel = b.dataset.channel; }); });
+  $('offer-tick').innerHTML = T.I.tick;
+  $('offer-form').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var f = e.target, err = $('offer-err'); err.classList.remove('show');
+    var body = { productId: product.id, amount: f.amount.value, name: f.name.value.trim(), phone: f.phone.value.trim(), message: f.message.value.trim() };
+    if (!body.amount || !body.name || !body.phone) { err.textContent = 'Please add your offer, name and phone number.'; err.classList.add('show'); return; }
+    var btns = f.querySelectorAll('button[type=submit]'); btns.forEach(function (b) { b.disabled = true; });
+    try {
+      var r = await T.api('/api/offers', { method: 'POST', body: body });
+      var url = channel === 'email' ? r.mailtoUrl : r.whatsappUrl;
+      $('offer-form-wrap').hidden = true; $('offer-done').hidden = false;
+      var link = $('offer-open'); link.href = url; link.textContent = channel === 'email' ? 'Open email' : 'Open WhatsApp';
+      if (channel === 'email') link.removeAttribute('target');
+      // Navigate directly (popup blockers stop window.open after an async call); the button above is the fallback.
+      setTimeout(function () { location.href = url; }, 600);
+    } catch (ex) {
+      err.textContent = ex.message; err.classList.add('show'); btns.forEach(function (b) { b.disabled = false; });
+    }
+  });
+
+  // ---- start: embedded data first, API only as a fallback ----
+  var b = T.boot;
+  if (b && b.product) render(b.product, b.similar);
+  else {
+    var id = (b && b.id) || new URLSearchParams(location.search).get('id');
+    if (!id) notFound();
+    else Promise.all([T.api('/api/products/' + encodeURIComponent(id)), T.api('/api/products').catch(function () { return []; })])
+      .then(function (r) {
+        var p = r[0];
+        render(p, r[1].filter(function (x) { return x.id !== p.id && x.category === p.category; })
+          .sort(function (a, c) { return Math.abs(a.price - p.price) - Math.abs(c.price - p.price); }).slice(0, 4));
+      }).catch(notFound);
+  }
+})();
 </script>
 </body>
 </html>

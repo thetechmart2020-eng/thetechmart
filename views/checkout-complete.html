@@ -2,58 +2,37 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Order status — TheTechMart</title>
-<meta name="robots" content="noindex">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{TITLE}}</title>
+<meta name="description" content="{{DESCRIPTION}}">
+<!--ROBOTS-->
 <link rel="icon" type="image/png" href="/img/favicon.png">
-<link rel="stylesheet" href="/css/style.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap">
+<link rel="stylesheet" href="/css/site.css">
 </head>
 <body>
-
-<nav class="nav">
-  <div class="wrap">
-    <a href="/" class="brand"><img class="logo-mark" src="/img/logo.png" alt="TheTechMart"></a>
-  </div>
-</nav>
-
-<div class="chat-page">
-  <div class="chat-thread" id="thread">
-    <div class="empty">Checking your order…</div>
-  </div>
-</div>
-
-<script src="/js/common.js"></script>
+<!--HEADER-->
+<main id="main" class="wrap">
+  <div class="form-page"><div class="box ok-box" id="state"><p>Checking your order...</p></div></div>
+</main>
+<!--FOOTER-->
+<script src="/js/site.js"></script>
 <script>
-const params = new URLSearchParams(location.search);
-const orderId = params.get('order');
-const status = params.get('status');
-
-async function load() {
-  const thread = document.getElementById('thread');
-  thread.innerHTML = '';
-  const el = document.createElement('div');
-  el.className = 'bubble from-bot';
-
+(function () {
+  var T = window.TTM, q = new URLSearchParams(location.search), status = q.get('status'), id = q.get('order');
+  var el = document.getElementById('state');
+  var wa = '<a class="btn btn-wa" data-wa href="https://wa.me/27716623565" target="_blank" rel="noopener">WhatsApp us</a>';
   if (status === 'success') {
-    el.innerHTML = `<p>🎉 Payment received — thank you! We're preparing your device for Courier Guy.</p>`;
+    el.innerHTML = '<div class="tick">' + T.I.tick + '</div><h1>Payment received</h1><p>Thank you. We are preparing your device for The Courier Guy.</p><p id="ref" class="card-sub"></p><a class="btn btn-primary" href="/">Back to the shop</a>';
   } else if (status === 'cancelled') {
-    el.innerHTML = `<p>No problem — your order is saved but payment wasn't completed. <a href="/" style="color:var(--accent)">Head back to the shop</a> or message us on WhatsApp to arrange payment another way.</p>`;
+    el.innerHTML = '<h1>Payment cancelled</h1><p>Your order is saved but payment was not completed. Message us on WhatsApp to pay another way.</p>' + wa;
   } else {
-    el.innerHTML = `<p>That payment didn't go through. Your order is still saved — message us on WhatsApp and we'll sort out another way to pay.</p>`;
+    el.innerHTML = '<h1>Payment did not go through</h1><p>Your order is still saved. Message us on WhatsApp and we will arrange another way to pay.</p>' + wa;
   }
-  thread.appendChild(el);
-
-  if (orderId) {
-    try {
-      const order = await api('/api/orders/' + orderId);
-      const info = document.createElement('div');
-      info.className = 'bubble from-bot';
-      info.innerHTML = `<p class="mono" style="font-size:12.5px;">Order ref ${order.id.slice(0, 8)} · ${order.fulfillmentMethod === 'delivery' ? order.courier + ' delivery' : 'In-store collection'} · ${fmtPrice(order.amount)}</p>`;
-      thread.appendChild(info);
-    } catch (e) {}
-  }
-}
-load();
+  if (id) T.api('/api/orders/' + encodeURIComponent(id)).then(function (o) {
+    var r = document.getElementById('ref'); if (r) r.textContent = 'Order ref ' + o.id.slice(0, 8) + ' · ' + T.money(o.amount);
+  }).catch(function () {});
+})();
 </script>
 </body>
 </html>

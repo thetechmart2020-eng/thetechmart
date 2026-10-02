@@ -2,168 +2,148 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sell or trade your device — TheTechMart</title>
-<meta name="description" content="Sell your phone for cash or trade it in at TheTechMart. Submit your device for a fast, fair quote over WhatsApp.">
-<meta property="og:title" content="Sell or trade your device — TheTechMart">
-<meta property="og:description" content="Sell your phone for cash or trade it in at TheTechMart. Submit your device for a fast, fair quote over WhatsApp.">
-<meta property="og:image" content="/img/logo.png">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{TITLE}}</title>
+<meta name="description" content="{{DESCRIPTION}}">
+<link rel="canonical" href="{{CANONICAL}}">
+<meta property="og:title" content="{{TITLE}}">
+<meta property="og:description" content="{{DESCRIPTION}}">
+<meta property="og:image" content="{{OGIMAGE}}">
+<meta name="theme-color" content="#0a0b0c">
+<!--ROBOTS-->
 <link rel="icon" type="image/png" href="/img/favicon.png">
-<link rel="stylesheet" href="/css/style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap">
+<link rel="stylesheet" href="/css/site.css">
+<!--BOOT-->
 </head>
-<body>
+<body class="has-bar">
+<!--HEADER-->
+<main id="main" class="wrap">
+  <div class="form-page">
+    <p class="eyebrow">Sell / Trade-in</p>
+    <h1>Sell or trade in your device</h1>
+    <p class="lede">Tell us about your device and add a few photos. We reply on WhatsApp with an offer.</p>
 
-<nav class="nav">
-  <div class="wrap">
-    <a href="/" class="brand"><img class="logo-mark" src="/img/logo.png" alt="TheTechMart"></a>
-    <div class="nav-links">
-      <a href="/#shop">Shop</a>
-      <a href="/sell">Sell / Trade-in</a>
+    <div id="form-wrap">
+      <form class="box" id="tradein-form" novalidate>
+        <div class="seg" role="group" aria-label="What would you like to do?">
+          <button type="button" data-type="sell" aria-pressed="true">Sell</button>
+          <button type="button" data-type="trade" aria-pressed="false">Trade in</button>
+        </div>
+        <input type="hidden" name="type" value="sell">
+        <div class="row2">
+          <div class="field"><label for="t-brand">Brand</label><input id="t-brand" name="brand" placeholder="e.g. Apple" required></div>
+          <div class="field"><label for="t-model">Model</label><input id="t-model" name="model" placeholder="e.g. iPhone 13" required></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label for="t-storage">Storage (optional)</label><input id="t-storage" name="storage" placeholder="e.g. 128GB"></div>
+          <div class="field"><label for="t-cond">Condition</label>
+            <select id="t-cond" name="condition"><option>Like new</option><option selected>Good</option><option>Fair</option><option>Damaged / for parts</option></select></div>
+        </div>
+        <div class="field"><label for="t-price">Your asking price in rand (optional)</label><input id="t-price" name="askingPrice" type="number" inputmode="numeric" min="0" placeholder="e.g. 6000"></div>
+        <div class="field">
+          <label for="photos">Photos (screen, back, any damage)</label>
+          <input id="photos" type="file" accept="image/*" multiple hidden>
+          <div class="drop" id="drop" role="button" tabindex="0">Tap to add photos (up to 6)</div>
+          <div class="previews" id="previews"></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label for="t-name">Your name</label><input id="t-name" name="name" autocomplete="name" required></div>
+          <div class="field"><label for="t-phone">Phone (WhatsApp)</label><input id="t-phone" name="phone" type="tel" autocomplete="tel" placeholder="082 123 4567" required></div>
+        </div>
+        <div class="field"><label for="t-notes">Anything else? (optional)</label><textarea id="t-notes" name="notes" placeholder="Battery health, accessories included, faults"></textarea></div>
+        <button class="btn btn-primary btn-block" type="submit" data-ch="whatsapp">Send on WhatsApp</button>
+        <button class="btn btn-ghost btn-block" type="submit" data-ch="email" style="margin-top:10px">Send by email</button>
+        <p class="err" id="t-err" role="alert"></p>
+      </form>
+
+      <div class="box" style="margin-top:18px">
+        <h2>What happens next</h2>
+        <ol style="margin:0;padding-left:20px;color:var(--muted);display:grid;gap:6px">
+          <li>We save your details and open WhatsApp (or email) with them filled in. Press send.</li>
+          <li>We review your device and photos.</li>
+          <li>We reply on WhatsApp with an offer.</li>
+        </ol>
+        <p style="margin-top:14px">Rather chat first? <a class="link-arrow" data-wa data-custom href="https://wa.me/27716623565?text=Hi%20TheTechMart%2C%20I%20would%20like%20to%20sell%20or%20trade%20in%20a%20device." target="_blank" rel="noopener">WhatsApp 071 662 3565</a></p>
+      </div>
     </div>
-    <a href="/sell" class="nav-cta">Get a quote</a>
-  </div>
-</nav>
 
-<div class="form-page">
-  <div class="eyebrow">Sell or trade</div>
-  <h1 style="font-size:30px;margin-bottom:8px;">Tell us about your device</h1>
-  <p style="color:var(--text-dim);font-size:14px;margin-bottom:26px;">We review every submission by hand and get back to you on WhatsApp with a number.</p>
-
-  <div class="type-toggle">
-    <button type="button" class="active" data-type="sell">Sell for cash
-      <span class="tt-desc">We buy it from you outright</span>
-    </button>
-    <button type="button" data-type="trade">Trade it in
-      <span class="tt-desc">Credit toward another device</span>
-    </button>
-  </div>
-
-  <div class="form-card">
-    <form id="tradein-form">
-      <input type="hidden" name="type" value="sell">
-      <div class="field-row">
-        <div class="field">
-          <label>Brand</label>
-          <input type="text" name="brand" required placeholder="e.g. Apple">
-        </div>
-        <div class="field">
-          <label>Model</label>
-          <input type="text" name="model" required placeholder="e.g. iPhone 13">
-        </div>
-      </div>
-      <div class="field-row">
-        <div class="field">
-          <label>Storage</label>
-          <input type="text" name="storage" placeholder="e.g. 128GB">
-        </div>
-        <div class="field">
-          <label>Condition</label>
-          <select name="condition">
-            <option>Like new</option>
-            <option>Good</option>
-            <option>Fair</option>
-            <option>Damaged / for parts</option>
-          </select>
-        </div>
-      </div>
-      <div class="field">
-        <label>Your asking price (optional)</label>
-        <input type="number" name="askingPrice" placeholder="e.g. 6000">
-      </div>
-      <div class="field">
-        <label>Photos of the device</label>
-        <div class="dropzone" id="dropzone">Click to add photos (screen, back, any damage)</div>
-        <input type="file" id="photos" name="photos" accept="image/*" multiple hidden>
-        <div class="thumb-row" id="thumbs"></div>
-      </div>
-      <div class="field-row">
-        <div class="field">
-          <label>Your name</label>
-          <input type="text" name="name" required>
-        </div>
-        <div class="field">
-          <label>WhatsApp number</label>
-          <input type="tel" name="phone" required placeholder="e.g. 0821234567">
-        </div>
-      </div>
-      <div class="field">
-        <label>Anything else?</label>
-        <textarea name="notes" placeholder="Battery health, accessories included, faults…"></textarea>
-      </div>
-      <div class="checkout-actions">
-        <button type="submit" data-channel="whatsapp" class="btn btn-primary btn-block">Submit via WhatsApp</button>
-        <button type="submit" data-channel="email" class="btn btn-ghost btn-block" style="margin-top:10px;">Submit via Email</button>
-      </div>
-      <p class="helper">This sends your details to us and opens WhatsApp or your email app so you can confirm — we'll come back with a firm offer.</p>
-    </form>
-  </div>
-</div>
-
-<footer class="footer">
-  <div class="wrap">
-    <span>© TheTechMart — "the #1 electronics market"</span>
-    <div class="footer-links">
-      <a href="https://wa.me/27716623565" target="_blank" rel="noopener">WhatsApp</a>
-      <a href="mailto:thetechmart2020@gmail.com">Email</a>
-      <a href="https://instagram.com/the_tech_mart" target="_blank" rel="noopener">Instagram</a>
-      <a href="https://web.facebook.com/thulani.molefi/?_rdc=1&_rdr#" target="_blank" rel="noopener">Facebook</a>
-      <a href="https://x.com/TheTechMart3" target="_blank" rel="noopener">X</a>
+    <div class="box ok-box" id="done" hidden>
+      <div class="tick" id="tick"></div><h1>Request sent</h1>
+      <p>Thank you. Press send in WhatsApp (or your email app) so we receive it. We reply with an offer.</p>
+      <a class="btn btn-primary btn-block" id="open-ch" href="#">Open WhatsApp</a>
+      <p style="margin-top:14px"><a class="link-arrow" href="/">Back to the shop</a></p>
     </div>
   </div>
-</footer>
+</main>
+<!--FOOTER-->
+<div class="sticky-bar single"><a class="btn btn-wa" data-wa data-custom href="https://wa.me/27716623565?text=Hi%20TheTechMart%2C%20I%20would%20like%20to%20sell%20or%20trade%20in%20a%20device." target="_blank" rel="noopener">WhatsApp us</a></div>
 
-<script src="/js/common.js"></script>
+<script src="/js/site.js"></script>
 <script>
-api('/api/track', { method: 'POST', body: { type: 'page_view', path: '/sell' } }).catch(() => {});
-let currentType = 'sell';
-document.querySelectorAll('.type-toggle button').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.type-toggle button').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    currentType = btn.dataset.type;
-    document.querySelector('input[name=type]').value = currentType;
+(function () {
+  var T = window.TTM, $ = function (id) { return document.getElementById(id); };
+  $('tick').innerHTML = T.I.tick;
+  T.track('page_view');
+
+  document.querySelectorAll('.seg button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('.seg button').forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+      document.querySelector('input[name=type]').value = b.dataset.type;
+    });
   });
-});
 
-const dropzone = document.getElementById('dropzone');
-const photosInput = document.getElementById('photos');
-dropzone.addEventListener('click', () => photosInput.click());
-photosInput.addEventListener('change', () => {
-  const thumbs = document.getElementById('thumbs');
-  thumbs.innerHTML = '';
-  [...photosInput.files].forEach(f => {
-    const img = document.createElement('img');
-    img.src = URL.createObjectURL(f);
-    thumbs.appendChild(img);
-  });
-  dropzone.textContent = `${photosInput.files.length} photo(s) selected — click to change`;
-});
-
-let sellChannel = 'whatsapp';
-document.querySelectorAll('#tradein-form button[type=submit]').forEach((btn) => {
-  btn.addEventListener('click', () => { sellChannel = btn.dataset.channel; });
-});
-
-document.getElementById('tradein-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const fd = new FormData(e.target);
-  fd.delete('photos');
-  [...photosInput.files].forEach(f => fd.append('photos', f));
-
-  try {
-    const res = await fetch('/api/tradeins', { method: 'POST', body: fd });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Something went wrong');
-    const url = sellChannel === 'email' ? data.mailtoUrl : data.whatsappUrl;
-    toast(sellChannel === 'email' ? 'Submitted — opening your email app…' : 'Submitted — opening WhatsApp…');
-    window.open(url, sellChannel === 'email' ? '_self' : '_blank');
-    e.target.reset();
-    document.getElementById('thumbs').innerHTML = '';
-    dropzone.textContent = 'Click to add photos (screen, back, any damage)';
-  } catch (err) {
-    toast(err.message);
+  // Photos are shrunk in the browser before upload: phone photos are several MB each and the host
+  // rejects requests over ~4.5MB in total, so this is what makes uploads reliable on mobile data.
+  var photos = [];
+  function shrink(file) {
+    return new Promise(function (resolve) {
+      var img = new Image(), url = URL.createObjectURL(file);
+      img.onload = function () {
+        var max = 1400, s = Math.min(1, max / Math.max(img.width, img.height));
+        var c = document.createElement('canvas'); c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        c.toBlob(function (blob) { URL.revokeObjectURL(url); resolve(blob ? new File([blob], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' }) : file); }, 'image/jpeg', 0.8);
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); resolve(file); };
+      img.src = url;
+    });
   }
-});
+  $('drop').addEventListener('click', function () { $('photos').click(); });
+  $('drop').addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('photos').click(); } });
+  $('photos').addEventListener('change', async function () {
+    var files = Array.from(this.files).slice(0, 6);
+    $('drop').textContent = 'Preparing photos...';
+    photos = await Promise.all(files.map(shrink));
+    $('previews').innerHTML = '';
+    photos.forEach(function (f) { var i = document.createElement('img'); i.alt = 'Selected photo'; i.src = URL.createObjectURL(f); $('previews').appendChild(i); });
+    $('drop').textContent = photos.length ? photos.length + ' photo(s) added. Tap to change' : 'Tap to add photos (up to 6)';
+  });
+
+  var channel = 'whatsapp';
+  document.querySelectorAll('#tradein-form button[type=submit]').forEach(function (b) { b.addEventListener('click', function () { channel = b.dataset.ch; }); });
+  $('tradein-form').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var f = e.target, err = $('t-err'); err.classList.remove('show');
+    if (!f.brand.value.trim() || !f.model.value.trim() || !f.name.value.trim() || !f.phone.value.trim()) {
+      err.textContent = 'Please add the brand, model, your name and phone number.'; err.classList.add('show'); return;
+    }
+    var fd = new FormData(f); photos.forEach(function (p) { fd.append('photos', p); });
+    var btns = f.querySelectorAll('button[type=submit]'); btns.forEach(function (b) { b.disabled = true; });
+    try {
+      var r = await T.api('/api/tradeins', { method: 'POST', body: fd });
+      var url = channel === 'email' ? r.mailtoUrl : r.whatsappUrl;
+      $('form-wrap').hidden = true; $('done').hidden = false;
+      var l = $('open-ch'); l.href = url; l.textContent = channel === 'email' ? 'Open email' : 'Open WhatsApp';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      setTimeout(function () { location.href = url; }, 700);
+    } catch (ex) {
+      err.textContent = ex.message; err.classList.add('show'); btns.forEach(function (b) { b.disabled = false; });
+    }
+  });
+})();
 </script>
 </body>
 </html>

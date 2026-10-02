@@ -8,9 +8,27 @@ function check(error) {
   if (error) throw new Error(error.message);
 }
 
+// ---------- category fallback ----------
+// If the products table has no `category` column yet (migration_003 / 007 not run),
+// or a row's category is empty, work it out from the brand/model so laptops,
+// consoles and accessories don't all show up under "Phones". Once the column is
+// filled in (via the CSV `category` column or the SQL in migration_007), the stored
+// value always wins and this is never used.
+function inferCategory(r) {
+  const brand = String(r.brand || '').toLowerCase();
+  const model = String(r.model || '').toLowerCase();
+  if (brand === 'generic' || /charger|cable|case\b|cover|dock|controller|hdmi|earphone|adapter|screen protector/.test(model)) return 'Accessories';
+  if (/airpods|earbuds|buds|headphone|speaker|soundbar|\bjbl\b|beats/.test(model)) return 'Audio';
+  if (/ipad|galaxy tab|\btab [as]\d|matepad/.test(model)) return 'Tablets';
+  if (/macbook|thinkpad|ideapad|inspiron|latitude|elitebook|pavilion|probook|vivobook|zenbook|\brog\b|legion|chromebook|laptop|notebook|\bxps\b/.test(model)
+    || ['hp', 'dell', 'lenovo', 'acer', 'msi'].includes(brand) || (brand === 'asus' && !/phone/.test(model))) return 'Laptops';
+  if (brand === 'nintendo' || /playstation|\bps[2-5]\b|xbox|steam deck/.test(model)) return 'Consoles';
+  return 'Phones';
+}
+
 // ---------- mappers ----------
 const productOut = (r) => ({
-  id: r.id, brand: r.brand, model: r.model, category: r.category || 'Phones', price: Number(r.price), condition: r.condition,
+  id: r.id, brand: r.brand, model: r.model, category: r.category || inferCategory(r), price: Number(r.price), condition: r.condition,
   storage: r.storage, color: r.color, stock: r.stock, imageUrl: r.image_url, images: r.images || [],
   active: r.active, sold: (r.stock || 0) < 1, createdAt: r.created_at
 });
