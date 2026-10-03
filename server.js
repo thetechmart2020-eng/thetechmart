@@ -80,10 +80,42 @@ function waDisplay(number) {
   return d;
 }
 
+// ---------- Reference photos (public/images/products, built by scripts/build-product-photos.py) ----------
+// Used only when a product has no photo of its own. They are indicative, not the exact unit.
+let PRODUCT_PHOTOS = {};
+try { PRODUCT_PHOTOS = JSON.parse(fs.readFileSync(path.join(__dirname, 'data', 'product-photos.json'), 'utf8')); } catch (e) { PRODUCT_PHOTOS = {}; }
+
+const ICECAT_NOTICE = 'Product images: Database Right data-sheet 2026 Icecat. All rights reserved. Product content provided by Icecat "as is" under the Open Content License (https://iceclog.com/open-content-license/), with no warranty of any kind. Product images remain the property of their respective brand owners.';
+
+// Files are named like the shot list (device, storage and sometimes a colour). Products are
+// matched on brand + model + storage ("key") so a missing colour does not stop a match.
+const PHOTO_BY_KEY = {};
+for (const [slug, e] of Object.entries(PRODUCT_PHOTOS)) PHOTO_BY_KEY[e.key || slug] = slug;
+
+function repoPhoto(p) {
+  const keys = [productFullKey(p), slugify([p.brand, p.model, p.storage].filter(Boolean).join('-'))];
+  for (const k0 of keys) {
+    const k = PRODUCT_PHOTOS[k0] ? k0 : PHOTO_BY_KEY[k0];
+    const e = k && PRODUCT_PHOTOS[k];
+    if (e) {
+      let credit = null;
+      if (e.kind === 'icecat') credit = 'Product image: Icecat, Open Content License';
+      else if (e.credit) credit = `Photo: ${e.credit.author}, ${e.credit.licence}`;
+      return { src: `/images/products/web/${k}-1200.webp`, credit };
+    }
+  }
+  return null;
+}
+
 // Public shape of a product (adds the "negotiated device" flag used for the 21-day warranty badge).
 function publicProduct(p) {
-  const images = (p.images && p.images.length ? p.images : (p.imageUrl ? [p.imageUrl] : [])).filter(Boolean);
-  return { ...p, images, thumbs: images.map(thumbOf), deal: deals.isDeal(p) };
+  let images = (p.images && p.images.length ? p.images : (p.imageUrl ? [p.imageUrl] : [])).filter(Boolean);
+  let extra = {};
+  if (!images.length) {
+    const ref = repoPhoto(p);
+    if (ref) { images = [ref.src]; extra = { indicative: true, photoCredit: ref.credit }; }
+  }
+  return { ...p, ...extra, images, imageUrl: p.imageUrl || images[0] || null, thumbs: images.map(thumbOf), deal: deals.isDeal(p) };
 }
 
 // Small card version of a product photo. Photos uploaded through the admin come as
@@ -94,6 +126,10 @@ function thumbOf(url) {
 
 // Only what the browser needs to draw a product card (keeps the page payload small).
 function cardProduct(p) {
+  if (!p.imageUrl && !(p.images && p.images.length)) {
+    const ref = repoPhoto(p);
+    if (ref) p = { ...p, imageUrl: ref.src };
+  }
   return {
     id: p.id, brand: p.brand, model: p.model, category: p.category, price: p.price, condition: p.condition,
     storage: p.storage, color: p.color, stock: p.stock, imageUrl: p.imageUrl || null,
@@ -833,7 +869,7 @@ function renderView(name, { title, description, canonical, ogImage, ogType = 'we
 app.get('/sitemap.xml', asyncRoute(async (req, res) => {
   const base = siteBase(req);
   const products = await db.listProducts({ activeOnly: true });
-  const staticUrls = ['', '/sell', '/policies'];
+  const staticUrls = ['', '/sell', '/policies', '/photo-credits'];
   const urls = [
     ...staticUrls.map((p) => `<url><loc>${base}${p}</loc><changefreq>daily</changefreq></url>`),
     ...products.map((p) => `<url><loc>${base}/product?id=${p.id}</loc><changefreq>weekly</changefreq></url>`)
@@ -924,7 +960,7 @@ app.get('/product', asyncRoute(async (req, res) => {
   const name = `${product.brand} ${product.model}`;
   const preOrder = product.stock < 1;
   const url = `${base}/product?id=${product.id}`;
-  const image = absUrl(base, product.imageUrl);
+  const image = absUrl(base, pub.imageUrl);
   const description = `${name}${product.storage ? ' ' + product.storage : ''}, ${product.condition}, ${fmtR(product.price)}. ${pub.deal ? '21-day replacement warranty (negotiated device)' : '3-month repair or replacement warranty'}, delivery R100 flat (The Courier Guy, about 2 days). Buy now or make an offer.`;
 
   edgeCache(res, 30, 600);
@@ -990,6 +1026,42 @@ app.get('/policies', (req, res) => {
     description: 'Trading hours, warranty and returns, Courier Guy delivery (flat R100, about 2 days) and payment options at TheTechMart.',
     canonical: `${base}/policies`
   }, base));
+});
+
+
+// Photo credits: Icecat notice plus the photographer, licence and link for each Wikimedia Commons photo in use.
+function photoCreditsHtml() {
+  const e = (x) => String(x == null ? '' : x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const groups = new Map();
+  for (const [slug, ph] of Object.entries(PRODUCT_PHOTOS)) {
+    if (ph.kind !== 'commons' || !ph.credit) continue;
+    const key = ph.credit.page;
+    if (!groups.has(key)) groups.set(key, { c: ph.credit, slugs: [] });
+    groups.get(key).slugs.push(slug);
+  }
+  const rows = [...groups.values()].sort((a, b) => a.c.title.localeCompare(b.c.title)).map(({ c, slugs }) =>
+    `<li><strong>${e(c.title)}</strong> by ${e(c.author)}, <a href="${e(c.licence_url || c.page)}" target="_blank" rel="noopener">${e(c.licence)}</a>` +
+    ` (<a href="${e(c.page)}" target="_blank" rel="noopener">source on Wikimedia Commons</a>)${c.note ? '. ' + e(c.note) : ''}` +
+    `<br><span class="muted">Used for: ${slugs.map((x) => e(x.replace(/-/g, ' '))).join('; ')}</span></li>`).join('');
+  return `<h2>Indicative images</h2>
+<p>Where we do not yet have a photo of the exact device, the picture shown is an indicative image of the same model. Colour, storage size and condition of the unit you receive can differ. WhatsApp us on 071 662 3565 for photos of the actual device.</p>
+<h2>Icecat product images</h2>
+<p>${e(ICECAT_NOTICE.replace('(https://iceclog.com/open-content-license/)', '').replace('License ,', 'License,'))}
+ Licence: <a href="https://iceclog.com/open-content-license/" target="_blank" rel="noopener">Icecat Open Content License</a>. These images are shown as supplied by Icecat and are not used for AI or machine learning.</p>
+<h2>Wikimedia Commons photos</h2>
+${rows ? `<ul class="credit-list">${rows}</ul>` : '<p>No Wikimedia Commons photos are in use at the moment.</p>'}
+<h2>Other images</h2>
+<p>Remaining device pictures are royalty-free stock images that do not require a credit.</p>`;
+}
+
+app.get('/photo-credits', (req, res) => {
+  const base = siteBase(req);
+  edgeCache(res, 300, 86400);
+  res.send(renderView('photo-credits.html', {
+    title: 'Photo credits | TheTechMart',
+    description: 'Credits and licences for the product photos used on TheTechMart.',
+    canonical: `${base}/photo-credits`
+  }, base).replace('<!--CREDITS-->', () => photoCreditsHtml()));
 });
 
 app.get('/sell', asyncRoute(async (req, res) => {

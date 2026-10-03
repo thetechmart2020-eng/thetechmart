@@ -1,0 +1,5 @@
+Icecat Open Content notice (place on the site, e.g. footer or product-photo credits page):
+
+Product images: Database Right data-sheet 2026 Icecat. All rights reserved. Product content provided by Icecat "as is" under the Open Content License (https://iceclog.com/open-content-license/), with no warranty of any kind. Product images remain the property of their respective brand owners.
+
+Rules from the licence (v1.4): keep the images exactly as received (editing/cropping triggers share-alike and change-notice duties), keep notices intact, do not use them for AI/ML training or generative AI, do not sell the images themselves, refresh from Icecat now and then so content stays current. Registering a free Open Icecat account is required (done by the owner as TheTechMart).

@@ -27,16 +27,31 @@
 
   <!-- 1. HERO: benefit-led headline, one-line proof, two actions -->
   <section class="hero">
-    <div class="wrap">
-      <p class="eyebrow">the #1 electronics market</p>
-      <h1>Quality-checked phones and tech, <em>backed by a warranty.</em></h1>
-      <p class="lede">Fair prices, delivered to your door in 2 days. Spotted something you like? Make an offer and we will reply on WhatsApp.</p>
-      <p class="proof">Grade A-B checked &middot; 3-month warranty &middot; 2-day Courier Guy delivery</p>
-      <div class="hero-actions">
-        <a class="btn btn-primary" href="#shop">Shop devices</a>
-        <a class="btn btn-ghost" data-wa href="https://wa.me/27716623565" target="_blank" rel="noopener">WhatsApp us</a>
+    <div class="wrap hero-grid">
+      <div class="hero-copy">
+        <p class="hero-chip" id="hero-chip" hidden><span class="dot" aria-hidden="true"></span><span id="hero-count"></span></p>
+        <h1>Quality-checked phones and tech, backed by a warranty.</h1>
+        <p class="lede">Fair prices, delivered to your door in 2 days. Spotted something you like? Make an offer and we will reply on WhatsApp.</p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="#shop">Shop devices</a>
+          <a class="btn btn-ghost" data-wa href="https://wa.me/27716623565" target="_blank" rel="noopener">WhatsApp us</a>
+        </div>
+        <!--RATED-->
       </div>
-      <!--RATED-->
+      <div class="stage" id="stage" aria-hidden="true">
+        <div class="floor"></div>
+        <div class="obj console"><div class="bob"><div class="c-sway"><div class="c-box"><div class="cf"></div><div class="cb"></div><div class="cl"></div><div class="cr"></div><div class="ct"></div><div class="cbm"></div></div></div></div></div>
+        <div class="obj phone"><div class="bob"><div class="p-sway"><div class="p-body">
+          <i style="--z:-8px"></i><i style="--z:-6px"></i><i style="--z:-4px"></i><i style="--z:-2px"></i><i style="--z:0px"></i><i style="--z:2px"></i><i style="--z:4px"></i><i style="--z:6px"></i>
+          <div class="p-back"></div>
+          <div class="p-screen"><div class="p-brand">TheTechMart</div><div id="p-slides">
+            <div class="p-slide on"><p class="s-t">Grade A-B checked</p><p class="s-s">Quality-checked pre-owned phones and tech</p></div>
+            <div class="p-slide"><p class="s-t">3-month warranty</p><p class="s-s">Repair or replacement on standard-price devices</p></div>
+            <div class="p-slide"><p class="s-t">2-day delivery</p><p class="s-s">The Courier Guy, flat R100</p></div>
+            <div class="p-slide"><p class="s-t">Make an offer</p><p class="s-s">We reply on WhatsApp</p></div>
+          </div></div>
+        </div></div></div></div>
+      </div>
     </div>
   </section>
 
@@ -193,12 +208,46 @@
 
   function start(products, ids) {
     ALL = products; dealIds = ids || [];
-    renderDeals(); renderCats(); fillFilters();
+    renderHero(); renderDeals(); renderCats(); fillFilters();
     var qs = new URLSearchParams(location.search);
     if (qs.get('category')) cat = qs.get('category');
     apply();
     T.track('page_view');
   }
+
+  // Hero: chip + phone screen cycle (facts, then real devices from live stock)
+  function renderHero() {
+    var avail = ALL.filter(function (p) { return !T.isSold(p); });
+    if (!avail.length) return;
+    $('hero-count').textContent = avail.length + (avail.length === 1 ? ' device' : ' devices') + ' in stock now';
+    $('hero-chip').hidden = false;
+    var ranked = avail.slice().sort(function (a, b) {
+      return (Number(dealIds.indexOf(b.id) >= 0) - Number(dealIds.indexOf(a.id) >= 0)) || (b.price - a.price);
+    });
+    var pick = [], seen = {};
+    ranked.forEach(function (p) { if (pick.length < 3 && !seen[p.category]) { seen[p.category] = 1; pick.push(p); } });
+    var box = $('p-slides');
+    box.insertAdjacentHTML('beforeend', pick.map(function (p) {
+      var g = T.gradeBadge(p);
+      return '<div class="p-slide"><p class="s-s">In stock now</p><p class="s-t">' + T.esc(p.brand + ' ' + p.model) + '</p>' +
+        '<p class="s-s">' + T.esc([p.storage, p.color].filter(Boolean).join(' \u00b7 ')) + '</p><p class="s-p">' + T.money(p.price) + '</p>' +
+        '<p class="s-s">' + T.esc(g.text) + '</p></div>';
+    }).join(''));
+  }
+
+  // Phone screen: rotate slides. Static first slide if the visitor prefers reduced motion.
+  (function () {
+    var box = $('p-slides'), i = 0, timer = null, stage = $('stage');
+    if (!box || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
+    function next() {
+      var s = box.querySelectorAll('.p-slide'); if (s.length < 2) return;
+      s[i].classList.remove('on'); i = (i + 1) % s.length; s[i].classList.add('on');
+    }
+    function run(on) { clearInterval(timer); if (on) timer = setInterval(next, 3400); stage.classList.toggle('is-paused', !on); }
+    if ('IntersectionObserver' in window) new IntersectionObserver(function (e) { run(e[0].isIntersecting && !document.hidden); }).observe(stage);
+    else run(true);
+    document.addEventListener('visibilitychange', function () { run(!document.hidden); });
+  })();
 
   function renderDeals() {
     var d = dealIds.map(function (id) { return ALL.find(function (p) { return p.id === id; }); }).filter(Boolean);

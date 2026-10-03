@@ -1,0 +1,13 @@
+All from Wikimedia Commons, scaled versions (1280px wide), otherwise unedited except 2 PNG->JPG flattens on white (15 Pro Max, 16).
+apple-iphone-11-128gb / 11-64gb: "IPhone 11.jpeg" by Rberchie, CC BY-SA 4.0 - https://commons.wikimedia.org/wiki/File:IPhone_11.jpeg
+apple-iphone-12-128gb: "IPhone 12 Green 128g.jpg" by 茅野ふたば, CC BY-SA 4.0 - https://commons.wikimedia.org/wiki/File:IPhone_12_Green_128g.jpg
+apple-iphone-13-pro-max-128gb / 256gb: "IPhone 13 Pro Max Sierra Blue 128g.jpg" by 茅野ふたば, CC BY-SA 4.0 - https://commons.wikimedia.org/wiki/File:IPhone_13_Pro_Max_Sierra_Blue_128g.jpg
+apple-iphone-15-pro-128gb / 256gb: "IPhone 15 Pro 2024.jpg" by Captainmorlypogi1959, CC BY-SA 4.0 - https://commons.wikimedia.org/wiki/File:IPhone_15_Pro_2024.jpg
+apple-iphone-15-pro-max-128gb / 256gb: "IPhone 15 pro max.png" by Ka Kit Pang, CC BY-SA 4.0 - https://commons.wikimedia.org/wiki/File:IPhone_15_pro_max.png
+apple-iphone-16-128gb / 256gb: "IPhone 16 Ultramarine Rear.png" by Padgriffin, CC BY 4.0 - https://commons.wikimedia.org/wiki/File:IPhone_16_Ultramarine_Rear.png
+apple-iphone-16-pro-128gb / 256gb: "IPhone 16 Pro - black.jpg" by Farragutful, CC BY-SA 4.0 - https://commons.wikimedia.org/wiki/File:IPhone_16_Pro_-_black.jpg
+apple-iphone-16-pro-max-256gb: "IPhone 16 Pro Max White 256g.jpg" by 茅野ふたば, CC BY-SA 4.0 - https://commons.wikimedia.org/wiki/File:IPhone_16_Pro_Max_White_256g.jpg
+apple-macbook-air-13-inch-m2 / m3: "M2 Macbook Air Midnight model - 1.jpg" by KKPCW (Kyu3), CC BY-SA 4.0 - https://commons.wikimedia.org/wiki/File:M2_Macbook_Air_Midnight_model_-_1.jpg
+samsung-galaxy-a24-128gb: "삼성 갤럭시 A24.jpg" by Striker9498, CC BY-SA 3.0 - https://commons.wikimedia.org/wiki/File:%EC%82%BC%EC%84%B1_%EA%B0%A4%EB%9F%AD%EC%8B%9C_A24.jpg
+sony-playstation-4-slim-500gb-black: "Sony PlayStation 4 Slim.jpg" by Kskhh, CC BY-SA 4.0 - https://commons.wikimedia.org/wiki/File:Sony_PlayStation_4_Slim.jpg
+Licences: https://creativecommons.org/licenses/by-sa/4.0 , https://creativecommons.org/licenses/by-sa/3.0 , https://creativecommons.org/licenses/by/4.0

@@ -102,7 +102,8 @@
     var spec = function (k, v) { return v ? '<div><dt>' + k + '</dt><dd>' + T.esc(v) + '</dd></div>' : ''; };
 
     $('content').innerHTML =
-      '<div class="pd"><div><div class="pd-img">' + main + '</div>' + thumbs + '</div>' +
+      '<div class="pd"><div><div class="pd-img">' + main + '</div>' + thumbs +
+        (p.indicative ? '<p class="img-note">Indicative image of this model, not the exact unit. ' + (p.photoCredit ? T.esc(p.photoCredit) + '. ' : '') + '<a href="/photo-credits">Photo credits</a></p>' : '') + '</div>' +
       '<div>' +
         '<h1>' + T.esc(p.brand + ' ' + p.model) + '</h1>' +
         '<p class="pd-sub">' + T.esc([p.storage, p.color].filter(Boolean).join(' · ')) + '</p>' +

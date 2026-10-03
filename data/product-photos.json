@@ -1,0 +1,952 @@
+{
+ "apple-iphone-11-128gb": {
+  "kind": "commons",
+  "w": 1280,
+  "h": 1707,
+  "key": "apple-iphone-11-128gb",
+  "credit": {
+   "title": "IPhone 11.jpeg",
+   "author": "Rberchie",
+   "licence": "CC BY-SA 4.0",
+   "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:IPhone_11.jpeg",
+   "note": ""
+  }
+ },
+ "apple-iphone-11-64gb": {
+  "kind": "commons",
+  "w": 1280,
+  "h": 1707,
+  "key": "apple-iphone-11-64gb",
+  "credit": {
+   "title": "IPhone 11.jpeg",
+   "author": "Rberchie",
+   "licence": "CC BY-SA 4.0",
+   "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:IPhone_11.jpeg",
+   "note": ""
+  }
+ },
+ "apple-iphone-11-pro-256gb": {
+  "kind": "commons",
+  "w": 1280,
+  "h": 642,
+  "key": "apple-iphone-11-pro-256gb",
+  "credit": {
+   "title": "20191227 iPhone 11 Pro 1.jpg",
+   "author": "Ralph Emmerich",
+   "licence": "CC BY-SA 4.0",
+   "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:20191227_iPhone_11_Pro_1.jpg",
+   "note": ""
+  }
+ },
+ "apple-iphone-11-pro-64gb": {
+  "kind": "commons",
+  "w": 1280,
+  "h": 642,
+  "key": "apple-iphone-11-pro-64gb",
+  "credit": {
+   "title": "20191227 iPhone 11 Pro 1.jpg",
+   "author": "Ralph Emmerich",
+   "licence": "CC BY-SA 4.0",
+   "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:20191227_iPhone_11_Pro_1.jpg",
+   "note": ""
+  }
+ },
+ "apple-iphone-11-pro-max-256gb": {
+  "kind": "commons",
+  "w": 960,
+  "h": 1594,
+  "key": "apple-iphone-11-pro-max-256gb",
+  "credit": {
+   "title": "Scan of back of iPhone 11 Pro Max Space Grey.jpg",
+   "author": "Dllu",
+   "licence": "CC BY-SA 4.0",
+   "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:Scan_of_back_of_iPhone_11_Pro_Max_Space_Grey.jpg",
+   "note": ""
+  }
+ },
+ "apple-iphone-11-pro-max-64gb": {
+  "kind": "commons",
+  "w": 960,
+  "h": 1594,
+  "key": "apple-iphone-11-pro-max-64gb",
+  "credit": {
+   "title": "Scan of back of iPhone 11 Pro Max Space Grey.jpg",
+   "author": "Dllu",
+   "licence": "CC BY-SA 4.0",
+   "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:Scan_of_back_of_iPhone_11_Pro_Max_Space_Grey.jpg",
+   "note": ""
+  }
+ },
+ "apple-iphone-12-128gb": {
+  "kind": "commons",
+  "w": 1280,
+  "h": 1707,
+  "key": "apple-iphone-12-128gb",
+  "credit": {
+   "title": "IPhone 12 Green 128g.jpg",
+   "author": "茅野ふたば",
+   "licence": "CC BY-SA 4.0",
+   "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:IPhone_12_Green_128g.jpg",
+   "note": ""
+  }
+ },
+ "apple-iphone-12-64gb": {
+  "kind": "commons",
+  "w": 2000,
+  "h": 2000,
+  "key": "apple-iphone-12-64gb"
+ },
+ "apple-iphone-12-pro-128gb": {
+  "kind": "commons",
+  "w": 2000,
+  "h": 2667,
+  "key": "apple-iphone-12-pro-128gb"
+ },
+ "apple-iphone-12-pro-256gb": {
+  "kind": "commons",
+  "w": 2000,
+  "h": 2667,
+  "key": "apple-iphone-12-pro-256gb"
+ },
+ "apple-iphone-12-pro-max-128gb": {
+  "kind": "commons",
+  "w": 2000,
+  "h": 3556,
+  "key": "apple-iphone-12-pro-max-128gb"
+ },
+ "apple-iphone-12-pro-max-256gb": {
+  "kind": "commons",
+  "w": 2000,
+  "h": 3556,
+  "key": "apple-iphone-12-pro-max-256gb"
+ },
+ "apple-iphone-13-128gb": {
+  "kind": "commons",
+  "w": 2000,
+  "h": 1404,
+  "key": "apple-iphone-13-128gb"
+ },
+ "apple-iphone-13-256gb": {
+  "kind": "commons",
+  "w": 2000,
+  "h": 1404,
+  "key": "apple-iphone-13-256gb"
+ },
+ "apple-iphone-13-pro-128gb": {
+  "kind": "commons",
+  "w": 2000,
+  "h": 1333,
+  "key": "apple-iphone-13-pro-128gb"
+ },
+ "apple-iphone-13-pro-256gb": {
+  "kind": "commons",
+  "w": 2000,
+  "h": 1333,
+  "key": "apple-iphone-13-pro-256gb"
+ },
+ "apple-iphone-13-pro-max-128gb": {
+  "kind": "commons",
+  "w": 1280,
+  "h": 1707,
+  "key": "apple-iphone-13-pro-max-128gb",
+  "credit": {
+   "title": "IPhone 13 Pro Max Sierra Blue 128g.jpg",
+   "author": "茅野ふたば",
+   "licence": "CC BY-SA 4.0",
+   "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:IPhone_13_Pro_Max_Sierra_Blue_128g.jpg",
+   "note": ""
+  }
+ },
+ "apple-iphone-13-pro-max-256gb": {
+  "kind": "commons",
+  "w": 1280,
+  "h": 1707,
+  "key": "apple-iphone-13-pro-max-256gb",
+  "credit": {
+   "title": "IPhone 13 Pro Max Sierra Blue 128g.jpg",
+   "author": "茅野ふたば",
+   "licence": "CC BY-SA 4.0",
+   "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:IPhone_13_Pro_Max_Sierra_Blue_128g.jpg",
+   "note": ""
+  }
+ },
+ "apple-iphone-14-128gb": {
+  "kind": "commons",
+  "w": 2000,
+  "h": 1404,
+  "key": "apple-iphone-14-128gb"
+ },
+ "apple-iphone-14-256gb": {
+  "kind": "commons",
+  "w": 960,
+  "h": 1617,
+  "key": "apple-iphone-14-256gb",
+  "credit": {
+   "title": "IPhone 14 Product Red.jpg",
+   "author": "Hajoon0102",
+   "licence": "CC BY-SA 4.0",
+   "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:IPhone_14_Product_Red.jpg",
+   "note": ""
+  }
+ },
+ "apple-iphone-14-pro-128gb": {
+  "kind": "commons",
+  "w": 2000,
+  "h": 2500,
+  "key": "apple-iphone-14-pro-128gb"
+ },
+ "apple-iphone-14-pro-256gb": {
+  "kind": "commons",
+  "w": 2000,
+  "h": 2500,
+  "key": "apple-iphone-14-pro-256gb"
+ },
+ "apple-iphone-14-pro-max-128gb": {
+  "kind": "commons",
+  "w": 2000,
+  "h": 3000,
+  "key": "apple-iphone-14-pro-max-128gb"
+ },
+ "apple-iphone-14-pro-max-256gb": {
+  "kind": "commons",
+  "w": 2000,
+  "h": 3000,
+  "key": "apple-iphone-14-pro-max-256gb"
+ },
+ "apple-iphone-15-128gb": {
+  "kind": "commons",
+  "w": 2000,
+  "h": 1333,
+  "key": "apple-iphone-15-128gb"
+ },
+ "apple-iphone-15-256gb": {
+  "kind": "commons",
+  "w": 2000,
+  "h": 1333,
+  "key": "apple-iphone-15-256gb"
+ },
+ "apple-iphone-15-pro-128gb": {
+  "kind": "commons",
+  "w": 1280,
+  "h": 1710,
+  "key": "apple-iphone-15-pro-128gb",
+  "credit": {
+   "title": "IPhone 15 Pro 2024.jpg",
+   "author": "Captainmorlypogi1959",
+   "licence": "CC BY-SA 4.0",
+   "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:IPhone_15_Pro_2024.jpg",
+   "note": ""
+  }
+ },
+ "apple-iphone-15-pro-256gb": {
+  "kind": "commons",
+  "w": 1280,
+  "h": 1710,
+  "key": "apple-iphone-15-pro-256gb",
+  "credit": {
+   "title": "IPhone 15 Pro 2024.jpg",
+   "author": "Captainmorlypogi1959",
+   "licence": "CC BY-SA 4.0",
+   "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:IPhone_15_Pro_2024.jpg",
+   "note": ""
+  }
+ },
+ "apple-iphone-15-pro-max-128gb": {
+  "kind": "commons",
+  "w": 1280,
+  "h": 1705,
+  "key": "apple-iphone-15-pro-max-128gb",
+  "credit": {
+   "title": "IPhone 15 pro max.png",
+   "author": "Ka Kit Pang",
+   "licence": "CC BY-SA 4.0",
+   "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:IPhone_15_pro_max.png",
+   "note": "Converted from PNG to JPG on a white background."
+  }
+ },
+ "apple-iphone-15-pro-max-256gb": {
+  "kind": "commons",
+  "w": 1280,
+  "h": 1705,
+  "key": "apple-iphone-15-pro-max-256gb",
+  "credit": {
+   "title": "IPhone 15 pro max.png",
+   "author": "Ka Kit Pang",
+   "licence": "CC BY-SA 4.0",
+   "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:IPhone_15_pro_max.png",
+   "note": "Converted from PNG to JPG on a white background."
+  }
+ },
+ "apple-iphone-16-128gb": {
+  "kind": "commons",
+  "w": 1280,
+  "h": 1707,
+  "key": "apple-iphone-16-128gb",
+  "credit": {
+   "title": "IPhone 16 Ultramarine Rear.png",
+   "author": "Padgriffin",
+   "licence": "CC BY 4.0",
+   "licence_url": "https://creativecommons.org/licenses/by/4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:IPhone_16_Ultramarine_Rear.png",
+   "note": "Converted from PNG to JPG on a white background."
+  }
+ },
+ "apple-iphone-16-256gb": {
+  "kind": "commons",
+  "w": 1280,
+  "h": 1707,
+  "key": "apple-iphone-16-256gb",
+  "credit": {
+   "title": "IPhone 16 Ultramarine Rear.png",
+   "author": "Padgriffin",
+   "licence": "CC BY 4.0",
+   "licence_url": "https://creativecommons.org/licenses/by/4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:IPhone_16_Ultramarine_Rear.png",
+   "note": "Converted from PNG to JPG on a white background."
+  }
+ },
+ "apple-iphone-16-pro-128gb": {
+  "kind": "commons",
+  "w": 1280,
+  "h": 1866,
+  "key": "apple-iphone-16-pro-128gb",
+  "credit": {
+   "title": "IPhone 16 Pro - black.jpg",
+   "author": "Farragutful",
+   "licence": "CC BY-SA 4.0",
+   "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:IPhone_16_Pro_-_black.jpg",
+   "note": ""
+  }
+ },
+ "apple-iphone-16-pro-256gb": {
+  "kind": "commons",
+  "w": 1280,
+  "h": 1866,
+  "key": "apple-iphone-16-pro-256gb",
+  "credit": {
+   "title": "IPhone 16 Pro - black.jpg",
+   "author": "Farragutful",
+   "licence": "CC BY-SA 4.0",
+   "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:IPhone_16_Pro_-_black.jpg",
+   "note": ""
+  }
+ },
+ "apple-iphone-16-pro-max-256gb": {
+  "kind": "commons",
+  "w": 1280,
+  "h": 1707,
+  "key": "apple-iphone-16-pro-max-256gb",
+  "credit": {
+   "title": "IPhone 16 Pro Max White 256g.jpg",
+   "author": "茅野ふたば",
+   "licence": "CC BY-SA 4.0",
+   "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:IPhone_16_Pro_Max_White_256g.jpg",
+   "note": ""
+  }
+ },
+ "apple-iphone-17-256gb": {
+  "kind": "commons",
+  "w": 1280,
+  "h": 1920,
+  "key": "apple-iphone-17-256gb",
+  "credit": {
+   "title": "Black iPhone 17.jpg",
+   "author": "Ahmad Ali Karim",
+   "licence": "CC0",
+   "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+   "page": "https://commons.wikimedia.org/wiki/File:Black_iPhone_17.jpg",
+   "note": ""
+  }
+ },
+ "apple-iphone-17-pro-256gb-sealed": {
+  "kind": "commons",
+  "w": 2000,
+  "h": 1333,
+  "key": "apple-iphone-17-pro-256gb-sealed"
+ },
+ "apple-iphone-17-pro-max-256gb-sealed": {
+  "kind": "commons",
+  "w": 2000,
+  "h": 1333,
+  "key": "apple-iphone-17-pro-max-256gb-sealed"
+ },
+ "apple-iphone-xr-128gb": {
+  "kind": "commons",
+  "w": 2000,
+  "h": 1413,
+  "key": "apple-iphone-xr-128gb"
+ },
+ "apple-iphone-xr-64gb": {
+  "kind": "commons",
+  "w": 2000,
+  "h": 1413,
+  "key": "apple-iphone-xr-64gb"
+ },
+ "apple-macbook-air-13-inch-m1-256gb-space-grey": {
+  "kind": "commons",
+  "w": 2000,
+  "h": 1333,
+  "key": "apple-macbook-air-13-inch-m1-256gb"
+ },
+ "apple-macbook-air-13-inch-m2-256gb-midnight": {
+  "kind": "commons",
+  "w": 1280,
+  "h": 1280,
+  "key": "apple-macbook-air-13-inch-m2-256gb",
+  "credit": {
+   "title": "M2 Macbook Air Midnight model - 1.jpg",
+   "author": "KKPCW (Kyu3)",
+   "licence": "CC BY-SA 4.0",
+   "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:M2_Macbook_Air_Midnight_model_-_1.jpg",
+   "note": ""
+  }
+ },
+ "apple-macbook-air-13-inch-m3-256gb-midnight": {
+  "kind": "commons",
+  "w": 1280,
+  "h": 1280,
+  "key": "apple-macbook-air-13-inch-m3-256gb",
+  "credit": {
+   "title": "M2 Macbook Air Midnight model - 1.jpg",
+   "author": "KKPCW (Kyu3)",
+   "licence": "CC BY-SA 4.0",
+   "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:M2_Macbook_Air_Midnight_model_-_1.jpg",
+   "note": ""
+  }
+ },
+ "apple-macbook-air-15-inch-m2-256gb-space-grey": {
+  "kind": "commons",
+  "w": 960,
+  "h": 720,
+  "key": "apple-macbook-air-15-inch-m2-256gb",
+  "credit": {
+   "title": "Macbook Air 15 inch - 1.jpg",
+   "author": "KKPCW（Kyu3）",
+   "licence": "CC BY-SA 4.0",
+   "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:Macbook_Air_15_inch_-_1.jpg",
+   "note": ""
+  }
+ },
+ "apple-macbook-pro-13-inch-intel-i5-256gb-silver": {
+  "kind": "commons",
+  "w": 2000,
+  "h": 1333,
+  "key": "apple-macbook-pro-13-inch-intel-i5-256gb"
+ },
+ "apple-macbook-pro-13-inch-m1-256gb-space-grey": {
+  "kind": "commons",
+  "w": 2000,
+  "h": 1333,
+  "key": "apple-macbook-pro-13-inch-m1-256gb"
+ },
+ "apple-macbook-pro-14-inch-m1-pro-512gb-space-grey": {
+  "kind": "commons",
+  "w": 2000,
+  "h": 1333,
+  "key": "apple-macbook-pro-14-inch-m1-pro-512gb"
+ },
+ "apple-macbook-pro-14-inch-m2-pro-512gb-space-grey": {
+  "kind": "commons",
+  "w": 2000,
+  "h": 1333,
+  "key": "apple-macbook-pro-14-inch-m2-pro-512gb"
+ },
+ "apple-macbook-pro-16-inch-m1-pro-512gb-space-grey": {
+  "kind": "commons",
+  "w": 2000,
+  "h": 1333,
+  "key": "apple-macbook-pro-16-inch-m1-pro-512gb"
+ },
+ "asus-rog-strix-g15-i7-rtx-3060-512gb-black": {
+  "kind": "icecat",
+  "w": 1500,
+  "h": 1500,
+  "key": "asus-rog-strix-g15-i7-rtx-3060-512gb"
+ },
+ "dell-inspiron-15-i5-256gb-silver": {
+  "kind": "commons",
+  "w": 5000,
+  "h": 5000,
+  "key": "dell-inspiron-15-i5-256gb"
+ },
+ "dell-latitude-5420-i5-11th-gen-256gb-black": {
+  "kind": "icecat",
+  "w": 4000,
+  "h": 4000,
+  "key": "dell-latitude-5420-i5-11th-gen-256gb"
+ },
+ "dell-latitude-5520-i7-11th-gen-512gb-black": {
+  "kind": "icecat",
+  "w": 4000,
+  "h": 4000,
+  "key": "dell-latitude-5520-i7-11th-gen-512gb"
+ },
+ "dell-latitude-7420-i7-11th-gen-512gb-black": {
+  "kind": "icecat",
+  "w": 4000,
+  "h": 4000,
+  "key": "dell-latitude-7420-i7-11th-gen-512gb"
+ },
+ "hp-elitebook-840-g7-i5-256gb-silver": {
+  "kind": "icecat",
+  "w": 3086,
+  "h": 2033,
+  "key": "hp-elitebook-840-g7-i5-256gb"
+ },
+ "hp-elitebook-840-g8-i5-256gb-silver": {
+  "kind": "icecat",
+  "w": 3096,
+  "h": 2035,
+  "key": "hp-elitebook-840-g8-i5-256gb"
+ },
+ "hp-elitebook-850-g8-i7-512gb-silver": {
+  "kind": "icecat",
+  "w": 3087,
+  "h": 1995,
+  "key": "hp-elitebook-850-g8-i7-512gb"
+ },
+ "hp-pavilion-15-i5-256gb-silver": {
+  "kind": "commons",
+  "w": 2000,
+  "h": 2999,
+  "key": "hp-pavilion-15-i5-256gb"
+ },
+ "lenovo-ideapad-3-i5-256gb-grey": {
+  "kind": "icecat",
+  "w": 2000,
+  "h": 2000,
+  "key": "lenovo-ideapad-3-i5-256gb"
+ },
+ "lenovo-thinkpad-t14-i7-512gb-black": {
+  "kind": "icecat",
+  "w": 927,
+  "h": 537,
+  "key": "lenovo-thinkpad-t14-i7-512gb"
+ },
+ "lenovo-thinkpad-t490-i5-256gb-black": {
+  "kind": "commons",
+  "w": 960,
+  "h": 945,
+  "key": "lenovo-thinkpad-t490-i5-256gb",
+  "credit": {
+   "title": "Lenovo ThinkPad T490.jpg",
+   "author": "P2u111",
+   "licence": "CC BY 4.0",
+   "licence_url": "https://creativecommons.org/licenses/by/4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:Lenovo_ThinkPad_T490.jpg",
+   "note": ""
+  }
+ },
+ "lenovo-thinkpad-x1-carbon-i7-512gb-black": {
+  "kind": "icecat",
+  "w": 969,
+  "h": 514,
+  "key": "lenovo-thinkpad-x1-carbon-i7-512gb"
+ },
+ "microsoft-xbox-360-slim-250gb-black": {
+  "kind": "commons",
+  "w": 960,
+  "h": 1322,
+  "key": "microsoft-xbox-360-slim-250gb",
+  "credit": {
+   "title": "Xbox-360S-Console-Set.jpg",
+   "author": "Evan-Amos",
+   "licence": "Public domain",
+   "licence_url": "",
+   "page": "https://commons.wikimedia.org/wiki/File:Xbox-360S-Console-Set.jpg",
+   "note": ""
+  }
+ },
+ "microsoft-xbox-one-s-1tb-white": {
+  "kind": "commons",
+  "w": 1280,
+  "h": 960,
+  "key": "microsoft-xbox-one-s-1tb"
+ },
+ "microsoft-xbox-one-x-1tb-black": {
+  "kind": "commons",
+  "w": 2000,
+  "h": 1333,
+  "key": "microsoft-xbox-one-x-1tb"
+ },
+ "microsoft-xbox-series-s-512gb-white": {
+  "kind": "commons",
+  "w": 2000,
+  "h": 3555,
+  "key": "microsoft-xbox-series-s-512gb"
+ },
+ "microsoft-xbox-series-x-1tb-black": {
+  "kind": "commons",
+  "w": 2000,
+  "h": 1125,
+  "key": "microsoft-xbox-series-x-1tb"
+ },
+ "nintendo-switch-2-256gb-black": {
+  "kind": "commons",
+  "w": 2000,
+  "h": 1333,
+  "key": "nintendo-switch-2-256gb"
+ },
+ "nintendo-switch-32gb-neon-red-blue": {
+  "kind": "commons",
+  "w": 2000,
+  "h": 1333,
+  "key": "nintendo-switch-32gb"
+ },
+ "nintendo-switch-lite-32gb-grey": {
+  "kind": "icecat",
+  "w": 2149,
+  "h": 1782,
+  "key": "nintendo-switch-lite-32gb"
+ },
+ "nintendo-switch-oled-64gb-white": {
+  "kind": "commons",
+  "w": 2000,
+  "h": 1333,
+  "key": "nintendo-switch-oled-64gb"
+ },
+ "nintendo-wii-u-32gb-black": {
+  "kind": "commons",
+  "w": 960,
+  "h": 649,
+  "key": "nintendo-wii-u-32gb",
+  "credit": {
+   "title": "Nintendo-Wii-U-Console-BR.jpg",
+   "author": "Evan-Amos",
+   "licence": "Public domain",
+   "licence_url": "",
+   "page": "https://commons.wikimedia.org/wiki/File:Nintendo-Wii-U-Console-BR.jpg",
+   "note": ""
+  }
+ },
+ "nintendo-wii-white": {
+  "kind": "commons",
+  "w": 1280,
+  "h": 1280,
+  "key": "nintendo-wii"
+ },
+ "samsung-galaxy-a14-64gb": {
+  "kind": "commons",
+  "w": 1280,
+  "h": 1707,
+  "key": "samsung-galaxy-a14-64gb",
+  "credit": {
+   "title": "Galaxy A14 Back.jpg",
+   "author": "GalaxyDoge72",
+   "licence": "CC0",
+   "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+   "page": "https://commons.wikimedia.org/wiki/File:Galaxy_A14_Back.jpg",
+   "note": ""
+  }
+ },
+ "samsung-galaxy-a24-128gb": {
+  "kind": "commons",
+  "w": 1280,
+  "h": 1707,
+  "key": "samsung-galaxy-a24-128gb",
+  "credit": {
+   "title": "삼성 갤럭시 A24.jpg",
+   "author": "Striker9498",
+   "licence": "CC BY-SA 3.0",
+   "licence_url": "https://creativecommons.org/licenses/by-sa/3.0",
+   "page": "https://commons.wikimedia.org/wiki/File:%EC%82%BC%EC%84%B1_%EA%B0%A4%EB%9F%AD%EC%8B%9C_A24.jpg",
+   "note": ""
+  }
+ },
+ "samsung-galaxy-a34-128gb": {
+  "kind": "icecat",
+  "w": 200,
+  "h": 250,
+  "key": "samsung-galaxy-a34-128gb"
+ },
+ "samsung-galaxy-a54-128gb": {
+  "kind": "icecat",
+  "w": 248,
+  "h": 312,
+  "key": "samsung-galaxy-a54-128gb"
+ },
+ "samsung-galaxy-a55-128gb": {
+  "kind": "commons",
+  "w": 1200,
+  "h": 1600,
+  "key": "samsung-galaxy-a55-128gb",
+  "credit": {
+   "title": "Galaxy A55.jpg",
+   "author": "OneUIExplorer",
+   "licence": "CC BY-SA 4.0",
+   "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:Galaxy_A55.jpg",
+   "note": ""
+  }
+ },
+ "samsung-galaxy-note-20-128gb": {
+  "kind": "icecat",
+  "w": 1948,
+  "h": 2936,
+  "key": "samsung-galaxy-note-20-128gb"
+ },
+ "samsung-galaxy-note-20-ultra-256gb": {
+  "kind": "icecat",
+  "w": 1980,
+  "h": 3000,
+  "key": "samsung-galaxy-note-20-ultra-256gb"
+ },
+ "samsung-galaxy-s21-128gb": {
+  "kind": "icecat",
+  "w": 1472,
+  "h": 2836,
+  "key": "samsung-galaxy-s21-128gb"
+ },
+ "samsung-galaxy-s21-256gb": {
+  "kind": "icecat",
+  "w": 1472,
+  "h": 2836,
+  "key": "samsung-galaxy-s21-256gb"
+ },
+ "samsung-galaxy-s21-plus-128gb": {
+  "kind": "icecat",
+  "w": 1600,
+  "h": 3081,
+  "key": "samsung-galaxy-s21-plus-128gb"
+ },
+ "samsung-galaxy-s21-plus-256gb": {
+  "kind": "icecat",
+  "w": 1600,
+  "h": 3081,
+  "key": "samsung-galaxy-s21-plus-256gb"
+ },
+ "samsung-galaxy-s21-ultra-128gb": {
+  "kind": "icecat",
+  "w": 1605,
+  "h": 3149,
+  "key": "samsung-galaxy-s21-ultra-128gb"
+ },
+ "samsung-galaxy-s21-ultra-256gb": {
+  "kind": "icecat",
+  "w": 1605,
+  "h": 3149,
+  "key": "samsung-galaxy-s21-ultra-256gb"
+ },
+ "samsung-galaxy-s22-128gb": {
+  "kind": "icecat",
+  "w": 2000,
+  "h": 2000,
+  "key": "samsung-galaxy-s22-128gb"
+ },
+ "samsung-galaxy-s22-256gb": {
+  "kind": "icecat",
+  "w": 2000,
+  "h": 2000,
+  "key": "samsung-galaxy-s22-256gb"
+ },
+ "samsung-galaxy-s22-plus-128gb": {
+  "kind": "icecat",
+  "w": 2000,
+  "h": 2000,
+  "key": "samsung-galaxy-s22-plus-128gb"
+ },
+ "samsung-galaxy-s22-plus-256gb": {
+  "kind": "icecat",
+  "w": 2000,
+  "h": 2000,
+  "key": "samsung-galaxy-s22-plus-256gb"
+ },
+ "samsung-galaxy-s22-ultra-128gb": {
+  "kind": "icecat",
+  "w": 1142,
+  "h": 1953,
+  "key": "samsung-galaxy-s22-ultra-128gb"
+ },
+ "samsung-galaxy-s22-ultra-256gb": {
+  "kind": "icecat",
+  "w": 1142,
+  "h": 1953,
+  "key": "samsung-galaxy-s22-ultra-256gb"
+ },
+ "samsung-galaxy-s23-128gb": {
+  "kind": "icecat",
+  "w": 623,
+  "h": 739,
+  "key": "samsung-galaxy-s23-128gb"
+ },
+ "samsung-galaxy-s23-256gb": {
+  "kind": "commons",
+  "w": 2000,
+  "h": 1333,
+  "key": "samsung-galaxy-s23-256gb"
+ },
+ "samsung-galaxy-s23-plus-256gb": {
+  "kind": "icecat",
+  "w": 365,
+  "h": 292,
+  "key": "samsung-galaxy-s23-plus-256gb"
+ },
+ "samsung-galaxy-s23-ultra-256gb": {
+  "kind": "icecat",
+  "w": 426,
+  "h": 434,
+  "key": "samsung-galaxy-s23-ultra-256gb"
+ },
+ "samsung-galaxy-s23-ultra-512gb": {
+  "kind": "icecat",
+  "w": 426,
+  "h": 434,
+  "key": "samsung-galaxy-s23-ultra-512gb"
+ },
+ "samsung-galaxy-s24-128gb": {
+  "kind": "icecat",
+  "w": 3000,
+  "h": 2000,
+  "key": "samsung-galaxy-s24-128gb"
+ },
+ "samsung-galaxy-s24-256gb": {
+  "kind": "icecat",
+  "w": 3000,
+  "h": 2000,
+  "key": "samsung-galaxy-s24-256gb"
+ },
+ "samsung-galaxy-s24-plus-256gb": {
+  "kind": "commons",
+  "w": 2000,
+  "h": 1333,
+  "key": "samsung-galaxy-s24-plus-256gb"
+ },
+ "samsung-galaxy-s24-ultra-256gb": {
+  "kind": "icecat",
+  "w": 1999,
+  "h": 2890,
+  "key": "samsung-galaxy-s24-ultra-256gb"
+ },
+ "samsung-galaxy-s24-ultra-512gb": {
+  "kind": "icecat",
+  "w": 1999,
+  "h": 2890,
+  "key": "samsung-galaxy-s24-ultra-512gb"
+ },
+ "samsung-galaxy-s25-128gb": {
+  "kind": "icecat",
+  "w": 940,
+  "h": 1117,
+  "key": "samsung-galaxy-s25-128gb"
+ },
+ "samsung-galaxy-s25-ultra-256gb": {
+  "kind": "icecat",
+  "w": 1924,
+  "h": 1938,
+  "key": "samsung-galaxy-s25-ultra-256gb"
+ },
+ "samsung-galaxy-z-flip-4-256gb": {
+  "kind": "icecat",
+  "w": 200,
+  "h": 209,
+  "key": "samsung-galaxy-z-flip-4-256gb"
+ },
+ "samsung-galaxy-z-flip-5-256gb": {
+  "kind": "icecat",
+  "w": 274,
+  "h": 343,
+  "key": "samsung-galaxy-z-flip-5-256gb"
+ },
+ "samsung-galaxy-z-flip-6-256gb": {
+  "kind": "icecat",
+  "w": 1068,
+  "h": 1335,
+  "key": "samsung-galaxy-z-flip-6-256gb"
+ },
+ "samsung-galaxy-z-fold-4-256gb": {
+  "kind": "commons",
+  "w": 2000,
+  "h": 1125,
+  "key": "samsung-galaxy-z-fold-4-256gb"
+ },
+ "samsung-galaxy-z-fold-5-256gb": {
+  "kind": "commons",
+  "w": 2000,
+  "h": 1125,
+  "key": "samsung-galaxy-z-fold-5-256gb"
+ },
+ "samsung-galaxy-z-fold-6-256gb": {
+  "kind": "icecat",
+  "w": 975,
+  "h": 1300,
+  "key": "samsung-galaxy-z-fold-6-256gb"
+ },
+ "sony-playstation-3-slim-500gb-black": {
+  "kind": "commons",
+  "w": 2000,
+  "h": 1333,
+  "key": "sony-playstation-3-slim-500gb"
+ },
+ "sony-playstation-4-pro-1tb-black": {
+  "kind": "commons",
+  "w": 2000,
+  "h": 3000,
+  "key": "sony-playstation-4-pro-1tb"
+ },
+ "sony-playstation-4-slim-1tb-black": {
+  "kind": "commons",
+  "w": 1280,
+  "h": 853,
+  "key": "sony-playstation-4-slim-1tb"
+ },
+ "sony-playstation-4-slim-500gb-black": {
+  "kind": "commons",
+  "w": 1280,
+  "h": 960,
+  "key": "sony-playstation-4-slim-500gb",
+  "credit": {
+   "title": "Sony PlayStation 4 Slim.jpg",
+   "author": "Kskhh",
+   "licence": "CC BY-SA 4.0",
+   "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:Sony_PlayStation_4_Slim.jpg",
+   "note": ""
+  }
+ },
+ "sony-playstation-5-pro-2tb-white": {
+  "kind": "commons",
+  "w": 960,
+  "h": 1350,
+  "key": "sony-playstation-5-pro-2tb",
+  "credit": {
+   "title": "PlayStation 5 Pro no disc drive.jpg",
+   "author": "BeatEmUps",
+   "licence": "CC BY 3.0",
+   "licence_url": "https://creativecommons.org/licenses/by/3.0",
+   "page": "https://commons.wikimedia.org/wiki/File:PlayStation_5_Pro_no_disc_drive.jpg",
+   "note": ""
+  }
+ },
+ "sony-playstation-5-slim-digital-1tb-white": {
+  "kind": "icecat",
+  "w": 3414,
+  "h": 4222,
+  "key": "sony-playstation-5-slim-digital-1tb"
+ },
+ "sony-playstation-5-slim-disc-1tb-white": {
+  "kind": "icecat",
+  "w": 3358,
+  "h": 4238,
+  "key": "sony-playstation-5-slim-disc-1tb"
+ }
+}

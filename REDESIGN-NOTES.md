@@ -26,6 +26,14 @@ Grade A-B (Like new / Good), New shown as New, Fair/damaged show their real cond
 
 ## Update log (October 2026)
 - Checkout summary: the "Photo coming soon" placeholder no longer spreads over the Delivery row (`.summary .thumb` is now positioned). File: `public/css/site.css`.
+- Hero v3: pure-CSS 3D phone and console on the right (no libraries). The phone screen cycles the hero facts, then 3 real devices from live stock. Code: #stage in views/index.html (renderHero + slide timer) and "Hero stage" in site.css. Pauses off-screen; static under reduced motion.
 - Hero link "Rated by real customers" jumps to the reviews (hidden automatically if no reviews are set up). Reviews sit right under the trust strip.
 - Reviews section on the home page: Elfsight Facebook widget, optional manual cards (WhatsApp screenshots, Google later), Facebook button and footer link. Files: `server.js`, `views/index.html`, `views/partials/footer.html`, `public/css/site.css`, `data/reviews.json`, `data/HOW-TO-ADD-REVIEWS.md`. The section is empty-safe: it hides if there is no widget id and no manual reviews.
 - Rollback for any of these: promote the previous Vercel deployment.
+
+## Update: product reference photos (Oct 2026)
+- 97 reference photos (Part 1 of 117) added in `public/images/products/`: `originals/` holds the files exactly as received, `web/` holds scaled copies (`<name>-1200.webp`, `<name>-480.webp`, never cropped).
+- A product that has no photo of its own automatically shows the matching reference photo (matched on brand + model + storage, colour ignored). Photos uploaded in the admin always win. These are marked "Indicative image of this model, not the exact unit" with a credit line on the product page.
+- New page `/photo-credits` (linked from the footer and in the sitemap): Icecat notice plus photographer, licence and link for each Wikimedia Commons photo in use. It is built from `data/product-photos.json`.
+- Adding the other 20 photos (Part 2): put the .jpg files in one folder together with `credits-pass3.txt`, `commons-credits-ledger.csv` and `_mapping.tsv` (see `data/photo-docs/`), run `python3 scripts/build-product-photos.py <that folder>`, upload the new files in `public/images/products/` plus `data/product-photos.json`.
+- Open: 41 photos have no Commons credit in any ledger, so the page treats them as royalty-free stock with no credit needed. Confirm that with the source notes.
