@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{TITLE}}</title>
+<meta name="description" content="{{DESCRIPTION}}">
+<link rel="canonical" href="{{CANONICAL}}">
+<meta property="og:title" content="{{TITLE}}">
+<meta property="og:description" content="{{DESCRIPTION}}">
+<meta property="og:image" content="{{OGIMAGE}}">
+<meta name="theme-color" content="#0a0b0c">
+<!--ROBOTS-->
+<link rel="icon" type="image/png" href="/img/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap"></noscript>
+<link rel="stylesheet" href="/css/site.css">
+<!--BOOT-->
+</head>
+<body>
+<!--HEADER-->
+<main id="main" class="wrap">
+  <div class="form-page">
+    <p class="eyebrow">Refer and earn</p>
+    <h1>Refer a friend, earn R300</h1>
+    <p class="lede">Get your personal link and share it. When your friend buys and the payment has cleared, you earn R300.</p>
+
+    <div id="form-wrap">
+      <form class="box" id="ref-form" novalidate>
+        <div class="row2">
+          <div class="field"><label for="r-name">Your name</label><input id="r-name" name="name" autocomplete="name" maxlength="60" required></div>
+          <div class="field"><label for="r-phone">Your phone (WhatsApp)</label><input id="r-phone" name="phone" type="tel" autocomplete="tel" placeholder="082 123 4567" maxlength="20" required></div>
+        </div>
+        <div style="position:absolute;left:-9999px" aria-hidden="true"><label>Website<input name="website" tabindex="-1" autocomplete="off"></label></div>
+        <button class="btn btn-primary btn-block" type="submit">Get my link</button>
+        <p class="err" id="r-err" role="alert"></p>
+      </form>
+
+      <div class="box" style="margin-top:18px">
+        <h2>How it works</h2>
+        <ol style="margin:0;padding-left:20px;color:var(--muted);display:grid;gap:6px">
+          <li>Get your link above and send it to a friend.</li>
+          <li>Your friend buys through the link. It is remembered for 30 days.</li>
+          <li>Once their payment has cleared, we confirm the sale with you on WhatsApp.</li>
+          <li>We pay you R300 about 48 hours after we confirm it.</li>
+        </ol>
+        <p style="margin-top:12px;color:var(--muted)">You cannot refer yourself. We pay by hand after the sale is confirmed, and we may decline a referral that does not look genuine.</p>
+      </div>
+    </div>
+
+    <div class="box ok-box" id="done" hidden>
+      <div class="tick" id="tick"></div><h1>Your link is ready</h1>
+      <p>Share it with friends. Your code is <strong id="r-code"></strong>.</p>
+      <div class="field" style="text-align:left"><label for="r-link">Your link</label><input id="r-link" readonly></div>
+      <button class="btn btn-ghost btn-block" type="button" id="r-copy">Copy link</button>
+      <a class="btn btn-wa btn-block" id="r-wa" href="#" target="_blank" rel="noopener" style="margin-top:10px">Share on WhatsApp</a>
+      <p style="margin-top:14px"><a class="link-arrow" href="/">Back to the shop</a></p>
+    </div>
+  </div>
+</main>
+<!--FOOTER-->
+<script src="/js/site.js"></script>
+<script>
+(function () {
+  var T = window.TTM, fv = T.fv, $ = function (id) { return document.getElementById(id); };
+  $('tick').innerHTML = T.I.tick;
+  T.track('page_view');
+  var form = $('ref-form');
+  var rules = [
+    { name: 'name', check: function (v) { return fv.clean(v, 60).length < 2 ? fv.MSG.name : ''; } },
+    { name: 'phone', check: function (v) { return !fv.phone(v) ? fv.MSG.phone : ''; } }
+  ];
+  fv.live(form, rules);
+  form.addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var err = $('r-err'); err.classList.remove('show');
+    if (!fv.run(form, rules)) { err.textContent = 'Please fix the highlighted fields.'; err.classList.add('show'); return; }
+    var unlock = fv.lock(form);
+    try {
+      var r = await T.api('/api/referrers', { method: 'POST', body: { name: fv.clean(form.name.value, 60), phone: form.phone.value.trim(), website: form.website.value } });
+      $('form-wrap').hidden = true; $('done').hidden = false;
+      $('r-code').textContent = r.code; $('r-link').value = r.link;
+      $('r-wa').href = 'https://wa.me/?text=' + encodeURIComponent(r.share);
+      $('r-copy').onclick = function () {
+        var done = function () { $('r-copy').textContent = 'Copied'; };
+        if (navigator.clipboard) navigator.clipboard.writeText(r.link).then(done, function () { $('r-link').select(); }); else { $('r-link').select(); }
+      };
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (ex) {
+      var shown = ex.fields && fv.apply(form, ex.fields);
+      err.textContent = shown ? 'Please fix the highlighted fields.' : ex.message; err.classList.add('show'); unlock();
+    }
+  });
+})();
+</script>
+</body>
+</html>

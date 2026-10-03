@@ -17,8 +17,21 @@
   }
   // Thousands separated by a space (R8 400), done by hand so every browser prints the same.
   function money(n) { return 'R' + String(Math.round(Number(n))).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); }
+  // Referral: a link like /?ref=THANDI-4F2 is remembered for 30 days and sent with offers, orders and
+  // meetup requests, and added to WhatsApp messages. It only tags the lead; admin decides what is paid.
+  var REF_KEY = 'ttm_ref', REF_DAYS = 30;
+  function refCode() {
+    try {
+      var m = location.search.match(/[?&]ref=([A-Za-z0-9-]{3,20})/);
+      if (m) localStorage.setItem(REF_KEY, JSON.stringify({ c: m[1].toUpperCase(), t: Date.now() }));
+      var s = JSON.parse(localStorage.getItem(REF_KEY) || 'null');
+      if (s && s.c && Date.now() - s.t < REF_DAYS * 864e5) return s.c;
+    } catch (e) {}
+    return '';
+  }
+  var REF = refCode();
   function waLink(msg) {
-    return 'https://wa.me/' + (cfg.whatsapp || WA_DEFAULT) + '?text=' + encodeURIComponent(msg);
+    return 'https://wa.me/' + (cfg.whatsapp || WA_DEFAULT) + '?text=' + encodeURIComponent(msg + (REF ? '\n\n(Referral: ' + REF + ')' : ''));
   }
 
 
@@ -113,6 +126,8 @@
   async function api(url, opts) {
     opts = opts || {};
     var isForm = opts.body instanceof FormData;
+    if (REF && opts.body && !isForm && typeof opts.body === 'object' && opts.body.ref === undefined) opts.body.ref = REF;
+    if (REF && isForm && !opts.body.has('ref')) opts.body.append('ref', REF);
     var res = await fetch(url, {
       method: opts.method || 'GET',
       headers: opts.body && !isForm ? { 'Content-Type': 'application/json' } : undefined,

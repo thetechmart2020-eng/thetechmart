@@ -35,7 +35,7 @@ const productOut = (r) => ({
 const offerOut = (r) => ({
   id: r.id, productId: r.product_id, productName: r.product_name, listPrice: Number(r.list_price),
   amount: Number(r.amount), name: r.name, phone: r.phone, email: r.email || '', message: r.message,
-  status: r.status, quoteNumber: r.quote_number || '', quoteUrl: r.quote_url || '', createdAt: r.created_at
+  status: r.status, quoteNumber: r.quote_number || '', quoteUrl: r.quote_url || '', referrerCode: r.referrer_code || '', createdAt: r.created_at
 });
 const tradeinOut = (r) => ({
   id: r.id, type: r.type, brand: r.brand, model: r.model, storage: r.storage, condition: r.condition,
@@ -57,6 +57,8 @@ const orderOut = (r) => ({
   quoteNumber: r.quote_number || '', quoteUrl: r.quote_url || '',
   invoiceNumber: r.invoice_number || '', invoiceUrl: r.invoice_url || '',
   amount: Number(r.amount),
+  referrerCode: r.referrer_code || '', referralStatus: r.referral_status || '',
+  referralConfirmedAt: r.referral_confirmed_at || null, referralPaidAt: r.referral_paid_at || null,
   status: r.status, notes: r.notes, createdAt: r.created_at, updatedAt: r.updated_at
 });
 
@@ -129,7 +131,11 @@ async function addOffer(o) {
     product_id: o.productId, product_name: o.productName, list_price: o.listPrice,
     amount: o.amount, name: o.name, phone: o.phone, email: o.email || '', message: o.message || '', status: 'pending'
   };
-  const { data, error } = await supabase.from('offers').insert(row).select().single();
+  if (o.referrerCode) row.referrer_code = o.referrerCode;
+  let { data, error } = await supabase.from('offers').insert(row).select().single();
+  if (error && row.referrer_code && /referrer_code/.test(error.message)) {   // migration 008 not run yet: save without the tag
+    delete row.referrer_code; ({ data, error } = await supabase.from('offers').insert(row).select().single());
+  }
   check(error);
   return offerOut(data);
 }
@@ -179,7 +185,7 @@ async function acceptOffer(id) {
   const order = await addOrder({
     type: 'sale', source: 'offer', sourceId: offer.id, productId: offer.productId,
     customerName: offer.name, customerPhone: offer.phone, amount: offer.amount,
-    notes: offer.message || ''
+    referrerCode: offer.referrerCode, notes: offer.message || ''
   });
 
   return { offer, order };
@@ -268,7 +274,11 @@ async function addOrder(o) {
     payment_status: o.paymentStatus || 'pending', checkout_channel: o.checkoutChannel || 'whatsapp',
     amount: o.amount || 0, status: 'new', notes: o.notes || ''
   };
-  const { data, error } = await supabase.from('orders').insert(row).select().single();
+  if (o.referrerCode) row.referrer_code = o.referrerCode;
+  let { data, error } = await supabase.from('orders').insert(row).select().single();
+  if (error && row.referrer_code && /referrer_code/.test(error.message)) {   // migration 008 not run yet: save without the tag
+    delete row.referrer_code; ({ data, error } = await supabase.from('orders').insert(row).select().single());
+  }
   check(error);
   return orderOut(data);
 }
@@ -290,6 +300,9 @@ async function updateOrder(id, patch) {
   if (patch.trackingNumber !== undefined) row.tracking_number = patch.trackingNumber;
   if (patch.paymentStatus !== undefined) row.payment_status = patch.paymentStatus;
   if (patch.paymentRef !== undefined) row.payment_ref = patch.paymentRef;
+  if (patch.referralStatus !== undefined) row.referral_status = patch.referralStatus;
+  if (patch.referralConfirmedAt !== undefined) row.referral_confirmed_at = patch.referralConfirmedAt;
+  if (patch.referralPaidAt !== undefined) row.referral_paid_at = patch.referralPaidAt;
   if (patch.quoteNumber !== undefined) row.quote_number = patch.quoteNumber;
   if (patch.quoteUrl !== undefined) row.quote_url = patch.quoteUrl;
   if (patch.invoiceNumber !== undefined) row.invoice_number = patch.invoiceNumber;
@@ -297,6 +310,23 @@ async function updateOrder(id, patch) {
   const { data, error } = await supabase.from('orders').update(row).eq('id', id).select().maybeSingle();
   check(error);
   return data ? orderOut(data) : null;
+}
+
+// ---------- referrers ----------
+async function upsertReferrer({ code, name, phone }) {
+  const { data, error } = await supabase.from('referrers').upsert({ code, name, phone }, { onConflict: 'code' }).select().single();
+  check(error);
+  return data;
+}
+async function getReferrer(code) {
+  const { data, error } = await supabase.from('referrers').select('*').eq('code', code).maybeSingle();
+  if (error) return null;   // table missing (migration 008 not run): treat as no referrer
+  return data;
+}
+async function listReferrers() {
+  const { data, error } = await supabase.from('referrers').select('*').order('created_at', { ascending: false });
+  if (error) return [];
+  return data;
 }
 
 // ---------- events (lightweight first-party analytics) ----------
@@ -344,5 +374,6 @@ module.exports = {
   addOffer, getOffer, listOffers, updateOfferStatus, updateOfferDocs, acceptOffer,
   addTradein, listTradeins, updateTradeinStatus, acceptTradein,
   addOrder, getOrder, listOrders, updateOrder,
+  upsertReferrer, getReferrer, listReferrers,
   logEvent, getAnalyticsSummary
 };

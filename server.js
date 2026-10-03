@@ -13,6 +13,8 @@ const payments = require('./lib/payments');
 const { generateQuotePdf, generateInvoicePdf, generatePriceListPdf } = require('./lib/documents');
 const deals = require('./lib/deals');
 const V = require('./lib/validate');
+const R = require('./lib/referral');
+const mail = require('./lib/mailer');
 
 // Flat Courier Guy delivery fee in rand. Collection is R0. This is the ONE place the fee is set:
 // checkout, the saved order, the WhatsApp/email message, the Yoco amount and the site text all use it.
@@ -30,7 +32,13 @@ app.set('trust proxy', true);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), {
+  // Images and fonts rarely change: cache a month. CSS and JS keep the same file name, so one hour.
+  setHeaders(res, file) {
+    if (/\.(webp|png|jpe?g|svg|ico|woff2?)$/i.test(file)) res.setHeader('Cache-Control', 'public, max-age=2592000');
+    else if (/\.(css|js)$/i.test(file)) res.setHeader('Cache-Control', 'public, max-age=3600');
+  }
+}));
 
 // ---------- Uploads (memory — files go straight to Supabase Storage, never to disk) ----------
 const csvUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } });
@@ -253,6 +261,15 @@ app.post('/api/track', asyncRoute(async (req, res) => {
 function fieldErrors(res, fields) {
   return res.status(400).json({ error: Object.values(fields)[0], fields });
 }
+// A referral code only counts if it belongs to a real referrer and is not the buyer's own number.
+async function resolveReferral(code, buyerPhone) {
+  const c = R.normCode(code); if (!c) return '';
+  const ref = await db.getReferrer(c);
+  return ref && !R.sameNumber(ref.phone, buyerPhone) ? ref.code : '';
+}
+const refLine = (code) => (code ? `\n\n(Referral: ${code})` : '');
+const rand = (n) => 'R' + Number(n).toLocaleString('en-ZA').replace(/\u00a0/g, ' ');
+
 const MSG_NAME = 'Please enter your name.';
 const MSG_PHONE = 'Please enter a valid South African number, like 082 123 4567 or +27 82 123 4567.';
 const MSG_EMAIL = 'Please enter a valid email address, like name@example.com.';
@@ -275,10 +292,12 @@ app.post('/api/offers', asyncRoute(async (req, res) => {
   if (Object.keys(fields).length) return fieldErrors(res, fields);
   const message = V.clean(req.body.message, 500);
 
+  const referrerCode = await resolveReferral(req.body.ref, ph.value);
   const offer = await db.addOffer({
     productId: product.id, productName: `${product.brand} ${product.model}`, listPrice: product.price,
-    amount, name, phone: ph.value, email: emailVal, message
+    amount, name, phone: ph.value, email: emailVal, message, referrerCode
   });
+  await mail.notify(`New offer: ${offer.productName} at ${rand(amount)}`, `${name} offered ${rand(amount)} (listed ${rand(price)}) on ${offer.productName}.\nPhone: ${ph.value}${emailVal ? '\nEmail: ' + emailVal : ''}${message ? '\nNote: ' + message : ''}${referrerCode ? '\nReferral: ' + referrerCode : ''}\n\nReply on WhatsApp: https://wa.me/${ph.value.replace(/^\+/, '').replace(/^0/, '27')}`);
   await db.logEvent({ type: 'offer_submitted', productId: product.id }).catch(() => {});
 
   const cfg = await db.getConfig();
@@ -286,7 +305,7 @@ app.post('/api/offers', asyncRoute(async (req, res) => {
 
   res.json({
     offer,
-    whatsappUrl: waLink(cfg.whatsappNumber, waMessage),
+    whatsappUrl: waLink(cfg.whatsappNumber, waMessage + refLine(referrerCode)),
     mailtoUrl: mailtoLink(cfg.contactEmail, `Offer on ${offer.productName} (ref ${offer.id.slice(0, 8)})`, waMessage)
   });
 }));
@@ -334,6 +353,7 @@ app.post('/api/tradeins', tradeinPhotos, asyncRoute(async (req, res) => {
     askingPrice, name, phone: ph.value, notes, photos
   });
   await db.logEvent({ type: 'tradein_submitted' }).catch(() => {});
+  await mail.notify(`New ${type === 'trade' ? 'trade-in' : 'sell'} request: ${brand} ${model}`, `${name} (${ph.value}) wants to ${type === 'trade' ? 'trade in' : 'sell'} a ${brand} ${model}${storage ? ' ' + storage : ''}.\nCondition: ${condition || 'N/A'}${askingPrice ? '\nAsking: ' + rand(askingPrice) : ''}\nPhotos: ${photos.length}\n${notes ? 'Notes: ' + notes : ''}\nOpen the admin Trade-ins tab to review.`);
 
   const cfg = await db.getConfig();
   const waMessage = `Hi TheTechMart! I'd like to ${submission.type === 'trade' ? 'trade in' : 'sell'} a device.\n\nDevice: ${brand} ${model}\nStorage: ${storage || 'N/A'}\nCondition: ${condition || 'N/A'}\n${askingPrice ? 'Asking price: R' + askingPrice : ''}\nName: ${name}\nContact: ${ph.value}\n${notes ? 'Notes: ' + notes : ''}\n\n(Ref: ${submission.id.slice(0, 8)})`;
@@ -408,8 +428,9 @@ app.post('/api/checkout', asyncRoute(async (req, res) => {
   const cfg = await db.getConfig();
   const wantsGateway = ['yoco', 'payjustnow', 'happypay'].includes(paymentMethod) && paymentPreference !== 'cash';
 
+  const referrerCode = await resolveReferral(req.body.ref, phone);
   const order = await db.addOrder({
-    type: 'sale', source: 'checkout', productId: product.id,
+    type: 'sale', source: 'checkout', productId: product.id, referrerCode,
     customerName: name, customerPhone: phone, customerEmail: email,
     deliveryAddress: method === 'delivery' ? address : (meetup ? { meetup } : {}), fulfillmentMethod: method,
     courier: method === 'delivery' ? 'Courier Guy' : (method === 'meetup' ? 'Meetup' : 'Collection'), paymentMethod: wantsGateway ? paymentMethod : 'manual',
@@ -428,6 +449,9 @@ app.post('/api/checkout', asyncRoute(async (req, res) => {
   const addressLine = method === 'delivery'
     ? `${address.line1}${address.line2 ? ', ' + address.line2 : ''}, ${address.city}, ${address.postalCode}${address.province ? ', ' + address.province : ''}`
     : (method === 'meetup' ? `Meetup on ${meetup.date}, ${meetup.slotLabel}, ${meetup.area}` : 'Collection, North Riding / Kya Sands (exact location shared on WhatsApp)');
+
+  await mail.notify(`New order: ${product.brand} ${product.model} (${rand(total)})`,
+    `${name} (${phone}${email ? ', ' + email : ''}) ordered ${product.brand} ${product.model}${product.storage ? ' ' + product.storage : ''}.\nTotal: ${rand(total)} (${method === 'delivery' ? 'courier' : method})\nPayment: ${wantsGateway ? paymentMethod + ' (card, awaiting payment)' : (paymentPreference || 'to arrange')}\n${method === 'delivery' ? 'Deliver to: ' + [address.line1, address.line2, address.city, address.postalCode, address.province].filter(Boolean).join(', ') : (meetup ? `Meetup: ${meetup.date}, ${meetup.slotLabel}, ${meetup.area}` : 'Collection')}${referrerCode ? '\nReferral: ' + referrerCode : ''}\nRef: ${order.id.slice(0, 8)}`);
 
   if (wantsGateway) {
     try {
@@ -448,7 +472,7 @@ app.post('/api/checkout', asyncRoute(async (req, res) => {
     order,
     preOrder: isPreOrder,
     deliveryFee, total, fulfillmentMethod: method,
-    whatsappUrl: waLink(cfg.whatsappNumber, summary),
+    whatsappUrl: waLink(cfg.whatsappNumber, summary + refLine(referrerCode)),
     mailtoUrl: mailtoLink(cfg.contactEmail, `Order: ${product.brand} ${product.model} (ref ${order.id.slice(0, 8)})`, summary)
   });
 }));
@@ -470,8 +494,9 @@ app.post('/api/meetups', asyncRoute(async (req, res) => {
   if (Object.keys(fields).length) return fieldErrors(res, fields);
   const meetup = r.value, notes = V.clean(req.body.notes, 500);
 
+  const referrerCode = await resolveReferral(req.body.ref, ph.value);
   const order = await db.addOrder({
-    type: 'sale', source: 'meetup', productId: product.id,
+    type: 'sale', source: 'meetup', productId: product.id, referrerCode,
     customerName: name, customerPhone: ph.value, customerEmail: emailVal,
     deliveryAddress: { meetup }, fulfillmentMethod: 'meetup', courier: 'Meetup',
     paymentMethod: 'manual', paymentStatus: 'pending', amount: Number(product.price) + MEETUP_FEE,
@@ -479,14 +504,34 @@ app.post('/api/meetups', asyncRoute(async (req, res) => {
   });
   await db.logEvent({ type: 'offer_submitted', productId: product.id }).catch(() => {});
 
+  await mail.notify(`New meetup request: ${product.brand} ${product.model}`,
+    `${name} (${ph.value}) wants a meetup for ${product.brand} ${product.model}.\nWhen: ${meetup.date}, ${meetup.slotLabel}\nWhere: ${meetup.area}\nTotal with R${MEETUP_FEE} meetup fee: ${rand(Number(product.price) + MEETUP_FEE)}${referrerCode ? '\nReferral: ' + referrerCode : ''}${notes ? '\nNote: ' + notes : ''}\nRef: ${order.id.slice(0, 8)}`);
   const cfg = await db.getConfig();
   const dev = `${product.brand} ${product.model}${product.storage ? ' · ' + product.storage : ''}`;
   const msg = `Hi TheTechMart! I'd like to book a meetup.\n\nDevice: ${dev} (R${product.price})\nMeetup fee: R${MEETUP_FEE} (special request, not refundable once the device is with our sales agent)\nTotal: R${Number(product.price) + MEETUP_FEE}\nPreferred date: ${meetup.date}\nTime slot: ${meetup.slotLabel}\nMeetup area: ${meetup.area}\nName: ${name}\nContact: ${ph.value}\n${notes ? 'Note: ' + notes + '\n' : ''}\n(Meetup ref: ${order.id.slice(0, 8)})`;
   res.json({
     order, ref: order.id.slice(0, 8), total: Number(product.price) + MEETUP_FEE, meetupFee: MEETUP_FEE,
-    whatsappUrl: waLink(cfg.whatsappNumber, msg),
+    whatsappUrl: waLink(cfg.whatsappNumber, msg + refLine(referrerCode)),
     mailtoUrl: mailtoLink(cfg.contactEmail, `Meetup request: ${dev} (ref ${order.id.slice(0, 8)})`, msg)
   });
+}));
+
+// ================= REFERRALS =================
+// Anyone can get a personal link. It only tags leads: nothing is paid automatically. The owner
+// confirms a sale in admin (payment received and cleared) and pays the referrer 48 hours later.
+app.post('/api/referrers', asyncRoute(async (req, res) => {
+  if (String(req.body.website || '').trim()) return res.json({ ok: true });   // hidden field: bots fill it in, people do not
+  const fields = {};
+  const name = V.oneLine(req.body.name, 60); if (name.length < 2) fields.name = MSG_NAME;
+  const ph = V.phone(req.body.phone); if (!ph.ok) fields.phone = MSG_PHONE;
+  if (Object.keys(fields).length) return fieldErrors(res, fields);
+  const code = R.makeCode(name, ph.value);
+  try { await db.upsertReferrer({ code, name, phone: ph.value }); }
+  catch (err) { console.error('[referrers]', err.message); return res.status(503).json({ error: 'Referral links are being set up. Please try again soon.' }); }
+  await mail.notify(`New referrer: ${name}`, `${name} (${ph.value}) signed up for a referral link.\nCode: ${code}`);
+  const base = `${req.protocol}://${req.get('host')}`;
+  const link = `${base}/?ref=${code}`;
+  res.json({ code, link, share: `Hi! I buy my phones and tech from TheTechMart. Quality-checked, 3-month warranty, courier nationwide. Have a look: ${link}` });
 }));
 
 app.get('/api/orders/:id', asyncRoute(async (req, res) => {
@@ -853,6 +898,29 @@ app.post('/api/admin/orders/:id/invoice', requireAdmin, asyncRoute(async (req, r
 
 // ================= ADMIN: ANALYTICS =================
 
+// Referral payouts. Rule: the sale must be PAID (cleared) before it can be confirmed, and the referrer
+// is paid 48 hours after confirmation. Paying is done by hand; the button only records that it happened.
+app.get('/api/admin/referrers', requireAdmin, asyncRoute(async (req, res) => {
+  res.json({ payout: R.PAYOUT, delayHours: R.PAYOUT_DELAY_HOURS, referrers: await db.listReferrers() });
+}));
+app.post('/api/admin/orders/:id/referral', requireAdmin, asyncRoute(async (req, res) => {
+  const order = await db.getOrder(req.params.id);
+  if (!order || !order.referrerCode) return res.status(404).json({ error: 'No referral on this order.' });
+  const action = req.body.action;
+  if (action === 'confirm') {
+    if (order.referralStatus) return res.status(400).json({ error: 'This referral is already confirmed.' });
+    if (order.paymentStatus !== 'paid') return res.status(400).json({ error: 'Mark the order as paid first. A referral is only confirmed once the payment has cleared.' });
+    return res.json(await db.updateOrder(order.id, { referralStatus: 'confirmed', referralConfirmedAt: new Date().toISOString() }));
+  }
+  if (action === 'paid') {
+    if (order.referralStatus !== 'confirmed') return res.status(400).json({ error: order.referralStatus === 'paid' ? 'Already marked as paid.' : 'Confirm the sale first.' });
+    const due = R.payableAt(order.referralConfirmedAt);
+    if (Date.now() < due.getTime()) return res.status(400).json({ error: `Payable from ${due.toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg' })} (48 hours after confirmation).` });
+    return res.json(await db.updateOrder(order.id, { referralStatus: 'paid', referralPaidAt: new Date().toISOString() }));
+  }
+  res.status(400).json({ error: 'Invalid action' });
+}));
+
 app.get('/api/admin/analytics', requireAdmin, asyncRoute(async (req, res) => {
   res.json(await db.getAnalyticsSummary());
 }));
@@ -984,7 +1052,7 @@ function renderView(name, { title, description, canonical, ogImage, ogType = 'we
 app.get('/sitemap.xml', asyncRoute(async (req, res) => {
   const base = siteBase(req);
   const products = await db.listProducts({ activeOnly: true });
-  const staticUrls = ['', '/sell', '/meetup', '/policies', '/photo-credits'];
+  const staticUrls = ['', '/sell', '/meetup', '/refer', '/policies', '/photo-credits'];
   const urls = [
     ...staticUrls.map((p) => `<url><loc>${base}${p}</loc><changefreq>daily</changefreq></url>`),
     ...products.map((p) => `<url><loc>${base}/product?id=${p.id}</loc><changefreq>weekly</changefreq></url>`)
@@ -1178,6 +1246,18 @@ app.get('/photo-credits', (req, res) => {
     canonical: `${base}/photo-credits`
   }, base).replace('<!--CREDITS-->', () => photoCreditsHtml()));
 });
+
+app.get('/refer', asyncRoute(async (req, res) => {
+  const base = siteBase(req);
+  let boot = null;
+  try { boot = { cfg: publicConfig(await db.getConfig()) }; } catch (err) { console.error('[refer] data unavailable:', err.message); }
+  if (boot) edgeCache(res, 60, 600);
+  res.send(renderView('refer.html', {
+    title: `Refer a friend, earn ${rand(R.PAYOUT)} | TheTechMart`,
+    description: `Share your personal link. When your friend buys and the payment clears, you earn ${rand(R.PAYOUT)}.`,
+    canonical: `${base}/refer`, boot
+  }, base));
+}));
 
 app.get('/meetup', asyncRoute(async (req, res) => {
   const base = siteBase(req);

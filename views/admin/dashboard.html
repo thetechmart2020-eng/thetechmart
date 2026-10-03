@@ -17,6 +17,8 @@
     <button class="admin-tab" data-tab="offers">Offers <span class="count" id="c-offers"></span></button>
     <button class="admin-tab" data-tab="tradeins">Trade-ins <span class="count" id="c-tradeins"></span></button>
     <button class="admin-tab" data-tab="orders">Orders <span class="count" id="c-orders"></span></button>
+    <button class="admin-tab" data-tab="followups">Follow-ups <span class="count" id="c-followups"></span></button>
+    <button class="admin-tab" data-tab="referrals">Referrals <span class="count" id="c-referrals"></span></button>
     <button class="admin-tab" data-tab="analytics">Analytics</button>
     <button class="admin-tab" data-tab="settings">Settings</button>
     <div style="flex:1"></div>
@@ -82,6 +84,24 @@
       <p class="helper" style="margin-bottom:16px;">Created automatically when a customer checks out, or when you accept an offer (sale) or a trade-in (purchase). Move each through its pipeline as it happens in real life.</p>
       <table class="table" id="orders-table">
         <thead><tr><th>Type</th><th>Customer</th><th>Delivery</th><th>Payment</th><th>Amount</th><th>Status</th><th>Documents</th><th>Date</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="admin-panel" id="panel-followups">
+      <div class="admin-head"><h2>Follow-ups</h2></div>
+      <p class="helper" style="margin-bottom:16px;">Offers still pending and orders not yet paid, more than 24 hours old. Most sales are lost to silence, so message these people. The button opens WhatsApp with a message ready to send.</p>
+      <table class="table" id="followups-table">
+        <thead><tr><th>Who</th><th>Device</th><th>What</th><th>Waiting</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="admin-panel" id="panel-referrals">
+      <div class="admin-head"><h2>Referrals</h2></div>
+      <p class="helper" style="margin-bottom:16px;">Rule: a referral is confirmed only after the order is paid and the payment has cleared. The referrer is paid 48 hours after you confirm. Pay them by hand (EFT or cash), then press Mark paid. Confirm and pay from the Orders tab.</p>
+      <table class="table" id="referrals-table">
+        <thead><tr><th>Referrer</th><th>Waiting for confirmation</th><th>Confirmed, waiting 48h</th><th>Due now</th><th>Already paid</th></tr></thead>
         <tbody></tbody>
       </table>
     </section>
@@ -178,7 +198,8 @@ async function loadAll() {
     api('/api/admin/products'), api('/api/admin/offers'), api('/api/admin/tradeins')
   ]);
   ORDERS = await api('/api/admin/orders').catch(() => []);
-  renderProducts(); renderOffers(); renderTradeins(); renderOrders(); renderCounts();
+  REFERRERS = await api('/api/admin/referrers').catch(() => ({ payout: 300, delayHours: 48, referrers: [] }));
+  renderProducts(); renderOffers(); renderTradeins(); renderOrders(); renderFollowups(); renderReferrals(); renderCounts();
 }
 
 function renderCounts() {
@@ -283,6 +304,77 @@ function renderTradeins() {
 }
 
 const ORDER_STATUSES = ['new', 'paid', 'completed', 'cancelled'];
+let REFERRERS = { payout: 300, delayHours: 48, referrers: [] };
+const DAY = 864e5;
+const payableAtMs = (o) => new Date(o.referralConfirmedAt).getTime() + REFERRERS.delayHours * 3600e3;
+const fmtWhen = (ms) => new Date(ms).toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg', dateStyle: 'medium', timeStyle: 'short' });
+const referrerOf = (code) => REFERRERS.referrers.find(r => r.code === code);
+
+async function markPaid(id) {
+  if (!confirm('Mark this order as paid? Only do this once the money has cleared in your account.')) return;
+  try { await api(`/api/admin/orders/${id}`, { method: 'PUT', body: { paymentStatus: 'paid', status: 'paid' } }); toast('Marked as paid'); loadAll(); } catch (e) { toast(e.message); }
+}
+async function referralAction(id, action) {
+  const msg = action === 'confirm' ? 'Confirm this sale for the referrer? Payment must have cleared. They become payable in 48 hours.' : 'Have you paid the referrer? This only records that it was paid.';
+  if (!confirm(msg)) return;
+  try { await api(`/api/admin/orders/${id}/referral`, { method: 'POST', body: { action } }); toast(action === 'confirm' ? 'Referral confirmed' : 'Referral marked paid'); loadAll(); } catch (e) { toast(e.message); }
+}
+function referralCell(o) {
+  if (!o.referrerCode) return '';
+  const r = referrerOf(o.referrerCode), who = r ? `${r.name} (${o.referrerCode})` : o.referrerCode;
+  let state = '';
+  if (o.referralStatus === 'paid') state = `<span class="status-pill accepted">referrer paid</span>`;
+  else if (o.referralStatus === 'confirmed') {
+    const due = payableAtMs(o), ready = Date.now() >= due;
+    state = ready
+      ? `<button class="btn btn-accept btn-sm" onclick="referralAction('${o.id}','paid')">Mark R${REFERRERS.payout} paid</button>`
+      : `<span class="helper">Payable from ${fmtWhen(due)}</span>`;
+  } else {
+    state = o.paymentStatus === 'paid'
+      ? `<button class="btn btn-ghost btn-sm" onclick="referralAction('${o.id}','confirm')">Confirm referral</button>`
+      : `<span class="helper">Confirm after payment clears</span>`;
+  }
+  return `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line)"><span class="helper">Referred by ${who}</span><br>${state}</div>`;
+}
+
+function waFollowUp(phone, text) { return waLinkClient(phone, text); }
+function renderFollowups() {
+  const cutoff = Date.now() - DAY, rows = [];
+  OFFERS.filter(o => o.status === 'pending' && new Date(o.createdAt).getTime() < cutoff).forEach(o => rows.push({
+    who: o.name, phone: o.phone, device: o.productName, what: `Offer of ${fmtPrice(o.amount)}, not answered`, ts: o.createdAt,
+    msg: `Hi ${o.name}, it's TheTechMart. Following up on your offer of R${o.amount} for the ${o.productName}. Is it still something you'd like? Happy to chat about the price.`
+  }));
+  ORDERS.filter(o => o.type === 'sale' && o.paymentStatus === 'pending' && !['completed', 'cancelled'].includes(o.status) && new Date(o.createdAt).getTime() < cutoff).forEach(o => rows.push({
+    who: o.customerName, phone: o.customerPhone, device: (PRODUCTS.find(p => p.id === o.productId) || {}).model || 'Device', what: `Order of ${fmtPrice(o.amount)}, not paid`, ts: o.createdAt,
+    msg: `Hi ${o.customerName}, it's TheTechMart. Your order (ref ${o.id.slice(0, 8)}) is waiting for payment. Do you need any help to complete it? We can send EFT details or a card payment link.`
+  }));
+  rows.sort((a, b) => new Date(a.ts) - new Date(b.ts));
+  document.getElementById('c-followups').textContent = rows.length || '';
+  document.querySelector('#followups-table tbody').innerHTML = rows.map(r => {
+    const days = Math.floor((Date.now() - new Date(r.ts).getTime()) / DAY);
+    return `<tr><td>${r.who}<br><span class="helper">${r.phone}</span></td><td>${r.device}</td><td>${r.what}</td><td>${days} day${days === 1 ? '' : 's'}</td><td class="row-actions"><a class="btn btn-accept btn-sm" href="${waFollowUp(r.phone, r.msg)}" target="_blank">WhatsApp</a></td></tr>`;
+  }).join('') || `<tr><td colspan="5" class="helper">Nothing waiting more than 24 hours. Nice.</td></tr>`;
+}
+
+function renderReferrals() {
+  const by = {};
+  ORDERS.filter(o => o.referrerCode).forEach(o => { (by[o.referrerCode] = by[o.referrerCode] || []).push(o); });
+  const codes = Object.keys(by);
+  let dueTotal = 0;
+  const rows = codes.map(code => {
+    const list = by[code], r = referrerOf(code);
+    const waiting = list.filter(o => !o.referralStatus), conf = list.filter(o => o.referralStatus === 'confirmed'), paid = list.filter(o => o.referralStatus === 'paid');
+    const due = conf.filter(o => Date.now() >= payableAtMs(o)), soon = conf.filter(o => Date.now() < payableAtMs(o));
+    dueTotal += due.length;
+    const msg = `Hi ${r ? r.name : ''}, it's TheTechMart. Your referral sale${due.length === 1 ? ' has' : 's have'} been confirmed. We're paying you R${due.length * REFERRERS.payout} now. Thank you!`;
+    return `<tr><td><b>${r ? r.name : code}</b><br><span class="helper">${code}${r ? ' · ' + r.phone : ''}</span></td>
+      <td>${waiting.length}</td><td>${soon.length}</td>
+      <td>${due.length ? `<b>${due.length}</b> (R${due.length * REFERRERS.payout}) ${r ? `<a class="btn btn-ghost btn-sm" href="${waLinkClient(r.phone, msg)}" target="_blank">WhatsApp</a>` : ''}` : '0'}</td>
+      <td>${paid.length}</td></tr>`;
+  });
+  document.getElementById('c-referrals').textContent = dueTotal || '';
+  document.querySelector('#referrals-table tbody').innerHTML = rows.join('') || `<tr><td colspan="5" class="helper">No referral orders yet. Share thetechmart.co.za/refer so friends can get their links.</td></tr>`;
+}
 function fmtAddress(a) {
   if (!a || !a.line1) return '';
   return [a.line1, a.line2, a.city, a.postalCode, a.province].filter(Boolean).join(', ');
@@ -308,8 +400,9 @@ function renderOrders() {
       <td>
         <span class="helper">${o.paymentMethod || 'manual'}</span><br>
         <span class="status-pill ${o.paymentStatus === 'paid' ? 'accepted' : o.paymentStatus === 'failed' ? 'rejected' : 'pending'}">${o.paymentStatus || 'pending'}</span>
+        ${o.paymentStatus !== 'paid' && o.paymentStatus !== 'not_required' ? `<br><button class="btn btn-ghost btn-sm" style="margin-top:6px;" onclick="markPaid('${o.id}')">Mark paid</button>` : ''}
       </td>
-      <td class="mono">${fmtPrice(o.amount)}</td>
+      <td class="mono">${fmtPrice(o.amount)}${referralCell(o)}</td>
       <td>
         <select onchange="updateOrderStatus('${o.id}', this.value)" style="background:var(--surface-2);border:1px solid var(--line);color:var(--text);border-radius:6px;padding:4px 8px;font-size:12.5px;">
           ${ORDER_STATUSES.map(s => `<option value="${s}" ${s === o.status ? 'selected' : ''}>${s}</option>`).join('')}
