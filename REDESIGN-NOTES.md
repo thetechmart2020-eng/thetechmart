@@ -23,3 +23,8 @@ Admin > Stock > the "Photos" button on a device > choose photos > Add photo(s). 
 
 ## Facts shown on the site
 Grade A-B (Like new / Good), New shown as New, Fair/damaged show their real condition; 3-month repair or replacement warranty (standard-price devices), 21-day replacement warranty (negotiated devices); Courier Guy delivery flat R100, about 2 days; R300 per sales referral; payments: Card (Yoco), EFT, Cash on collection; online / WhatsApp only.
+
+## Update log (October 2026)
+- Checkout summary: the "Photo coming soon" placeholder no longer spreads over the Delivery row (`.summary .thumb` is now positioned). File: `public/css/site.css`.
+- Reviews section on the home page: Elfsight Facebook widget, optional manual cards (WhatsApp screenshots, Google later), Facebook button and footer link. Files: `server.js`, `views/index.html`, `views/partials/footer.html`, `public/css/site.css`, `data/reviews.json`, `data/HOW-TO-ADD-REVIEWS.md`. The section is empty-safe: it hides if there is no widget id and no manual reviews.
+- Rollback for any of these: promote the previous Vercel deployment.

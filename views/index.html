@@ -91,6 +91,8 @@
     </div>
   </section>
 
+  <!--REVIEWS-->
+
   <!-- 5. HOW IT WORKS -->
   <section class="section">
     <div class="wrap">
@@ -178,6 +180,7 @@
 </div>
 
 <script src="/js/site.js"></script>
+<script>(function(){var t=document.querySelectorAll('.rev-tab');t.forEach(function(b){b.addEventListener('click',function(){t.forEach(function(x){x.classList.toggle('on',x===b)});document.querySelectorAll('.rev-card').forEach(function(c){c.hidden=b.dataset.src!=='all'&&c.dataset.src!==b.dataset.src})})})})();</script>
 <script>
 (function () {
   var T = window.TTM, $ = function (id) { return document.getElementById(id); };

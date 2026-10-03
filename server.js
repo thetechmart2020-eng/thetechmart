@@ -766,11 +766,53 @@ function safeJson(obj) {
   return JSON.stringify(obj).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
 }
 
+
+// ---- Customer reviews (data/reviews.json). Real reviews only; section stays hidden while the list is empty. ----
+const REVIEWS = (() => { try { return require('./data/reviews.json'); } catch (e) { return { reviews: [] }; } })();
+const safeUrl = (u) => (typeof u === 'string' && /^https:\/\//i.test(u.trim()) ? u.trim() : '');
+const safeImg = (u) => (typeof u === 'string' && /^\/img\/reviews\/[\w.\-]+$/.test(u) ? u : '');
+const REVIEW_SOURCES = { facebook: 'Facebook', whatsapp: 'WhatsApp', google: 'Google' };
+function reviewsHtml() {
+  const list = (REVIEWS.reviews || []).filter((r) => REVIEW_SOURCES[r.source] && (r.text || safeImg(r.image)));
+  const g = safeUrl(REVIEWS.googleUrl), fb = safeUrl(REVIEWS.facebookUrl);
+  const widgetId = /^[0-9a-f-]{36}$/i.test(REVIEWS.elfsightId || '') ? REVIEWS.elfsightId : '';
+  if (!list.length && !widgetId) return '';
+  let manual = '';
+  if (list.length) {
+    const present = Object.keys(REVIEW_SOURCES).filter((k) => list.some((r) => r.source === k));
+    const tabs = present.length > 1
+      ? '<div class="rev-tabs" role="group" aria-label="Filter reviews"><button type="button" class="rev-tab on" data-src="all">All</button>' +
+        present.map((k) => `<button type="button" class="rev-tab" data-src="${k}">${REVIEW_SOURCES[k]}</button>`).join('') + '</div>'
+      : '';
+    const cards = list.map((r) => {
+      const img = safeImg(r.image), url = safeUrl(r.url), label = REVIEW_SOURCES[r.source];
+      const who = [r.name ? escapeHtml(r.name) : '', r.date ? escapeHtml(r.date) : ''].filter(Boolean).join(' \u00b7 ');
+      const stars = Number(r.rating) >= 1 && Number(r.rating) <= 5 ? `<p class="rev-stars" aria-label="${Number(r.rating)} out of 5 stars">${'\u2605'.repeat(Math.round(Number(r.rating)))}</p>` : '';
+      return `<figure class="rev-card" data-src="${r.source}"><span class="rev-badge rev-${r.source}">${label}</span>` + stars +
+        (img ? `<a class="rev-shot" href="${img}" target="_blank" rel="noopener"><img src="${img}" alt="${escapeHtml(r.alt || 'WhatsApp conversation with a customer')}" loading="lazy"></a>` : '') +
+        (r.text ? `<blockquote>${escapeHtml(r.text)}</blockquote>` : '') +
+        `<figcaption>${who}${url ? `${who ? ' \u00b7 ' : ''}<a href="${url}" target="_blank" rel="noopener">View on ${label}</a>` : ''}</figcaption></figure>`;
+    }).join('');
+    manual = `${tabs}<div class="rev-grid">${cards}</div>`;
+  }
+  const widget = widgetId
+    ? `<div class="rev-widget"><script src="https://elfsightcdn.com/platform.js" async></script><div class="elfsight-app-${widgetId}" data-elfsight-app-lazy></div></div>`
+    : '';
+  const links = (fb ? `<a class="btn btn-ghost" href="${fb}" target="_blank" rel="noopener">See all reviews on Facebook</a>` : '') +
+                (g ? `<a class="btn btn-ghost" href="${g}" target="_blank" rel="noopener">See all reviews on Google</a>` : '');
+  return `<section class="section section-alt" id="reviews"><div class="wrap"><div class="section-head"><div><p class="eyebrow">Reviews</p><h2>What customers say</h2><p>Real reviews from our customers.</p></div></div>${widget}${manual}${links ? `<div class="rev-links">${links}</div>` : ''}</div></section>`;
+}
+function footerSocial() {
+  const fb = safeUrl(REVIEWS.facebookUrl);
+  return fb ? `<li><a href="${fb}" target="_blank" rel="noopener">Facebook</a></li>` : '';
+}
+
 // Fills a view template. {{KEY}} tokens are HTML-escaped; JSON-LD and boot data are inserted raw.
 function renderView(name, { title, description, canonical, ogImage, ogType = 'website', noindex = false, jsonld, boot } = {}, base = '') {
   let html = readView(name)
     .replace('<!--HEADER-->', readView('partials/header.html'))
-    .replace('<!--FOOTER-->', readView('partials/footer.html'))
+    .replace('<!--FOOTER-->', readView('partials/footer.html').replace('<!--FBLINK-->', footerSocial()))
+    .replace('<!--REVIEWS-->', () => reviewsHtml())
     // Trading hours / returns / delivery text lives in ONE partial, used by the footer and the /policies page.
     .split('<!--POLICY-->').join(readView('partials/policy.html'));
   const tokens = {
