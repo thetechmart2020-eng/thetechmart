@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{TITLE}}</title>
+<meta name="description" content="{{DESCRIPTION}}">
+<link rel="canonical" href="{{CANONICAL}}">
+<meta name="theme-color" content="#0a0b0c">
+<link rel="icon" type="image/png" href="/img/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap"></noscript>
+<link rel="stylesheet" href="/css/site.css">
+</head>
+<body class="has-bar">
+<!--HEADER-->
+<main id="main" class="wrap">
+  <div class="form-page">
+    <p class="eyebrow">Your order</p>
+    <h1>Track your order</h1>
+    <p class="lede">Enter the 8-character order reference from your message and the phone number you ordered with.</p>
+
+    <form class="box" id="track-form" novalidate>
+      <div class="row2">
+        <div class="field"><label for="t-ref">Order reference</label><input id="t-ref" name="ref" maxlength="9" autocomplete="off" autocapitalize="off" placeholder="e.g. 3f2a9c1d" required></div>
+        <div class="field"><label for="t-phone">Phone number</label><input id="t-phone" name="phone" type="tel" autocomplete="tel" placeholder="082 123 4567" maxlength="20" required></div>
+      </div>
+      <button class="btn btn-primary btn-block" type="submit">Track order</button>
+      <p class="err" id="t-err" role="alert"></p>
+    </form>
+
+    <div class="box" id="result" hidden style="margin-top:18px">
+      <h2 id="r-device"></h2>
+      <p class="helper" id="r-meta" style="margin-bottom:14px"></p>
+      <ol class="track-steps" id="r-steps"></ol>
+      <p class="notice" id="r-cancel" hidden>This order was cancelled. Message us on WhatsApp if you have questions.</p>
+      <p style="margin-top:14px;color:var(--muted)">Questions? <a class="link-arrow" data-wa href="https://wa.me/27716623565" target="_blank" rel="noopener">WhatsApp 071 662 3565</a></p>
+    </div>
+  </div>
+</main>
+<!--FOOTER-->
+<div class="sticky-bar single"><a class="btn btn-wa" data-wa href="https://wa.me/27716623565" target="_blank" rel="noopener">WhatsApp us</a></div>
+<script src="/js/site.js"></script>
+<script>
+(function () {
+  var T = window.TTM, fv = T.fv, $ = function (id) { return document.getElementById(id); };
+  T.track('page_view');
+  var form = $('track-form');
+  var q = new URLSearchParams(location.search).get('order'); if (q) form.ref.value = q.slice(0, 9);
+  var rules = [
+    { name: 'ref', check: function (v) { return /^#?[0-9a-zA-Z]{8}$/.test((v || '').trim()) ? '' : 'Please enter the 8-character order reference from your message.'; } },
+    { name: 'phone', check: function (v) { return !fv.phone(v) ? fv.MSG.phone : ''; } }
+  ];
+  fv.live(form, rules);
+  form.addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var err = $('t-err'); err.classList.remove('show'); $('result').hidden = true;
+    if (!fv.run(form, rules)) { err.textContent = 'Please fix the highlighted fields.'; err.classList.add('show'); return; }
+    var unlock = fv.lock(form);
+    try {
+      var r = await T.api('/api/track-order', { method: 'POST', body: { ref: form.ref.value.trim(), phone: form.phone.value.trim() } });
+      $('r-device').textContent = r.device;
+      $('r-meta').textContent = 'Reference ' + r.ref + ' · ' + r.method + ' · ' + T.money(r.total);
+      $('r-steps').innerHTML = r.steps.map(function (s) {
+        return '<li class="' + (s.done ? 'done' : '') + '"><span class="dot">' + (s.done ? '&#10003;' : '') + '</span><div><strong>' + T.esc(s.label) + '</strong>' + (s.note ? '<br><span class="helper">' + T.esc(s.note) + '</span>' : '') + '</div></li>';
+      }).join('');
+      $('r-cancel').hidden = !r.cancelled; $('r-steps').hidden = r.cancelled;
+      $('result').hidden = false; unlock();
+      $('result').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } catch (ex) {
+      var shown = ex.fields && fv.apply(form, ex.fields);
+      err.textContent = shown ? 'Please fix the highlighted fields.' : ex.message; err.classList.add('show'); unlock();
+    }
+  });
+})();
+</script>
+</body>
+</html>

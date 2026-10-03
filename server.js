@@ -516,6 +516,58 @@ app.post('/api/meetups', asyncRoute(async (req, res) => {
   });
 }));
 
+// ================= ORDER TRACKING =================
+// A customer enters the short reference from their WhatsApp message plus the phone number they ordered
+// with. Both must match. A wrong reference and a wrong phone give the same answer, so nobody can
+// use this to find out which references exist.
+const trackHits = new Map();
+function trackLimited(ip) {
+  const now = Date.now(), list = (trackHits.get(ip) || []).filter((t) => now - t < 10 * 60 * 1000);
+  list.push(now); trackHits.set(ip, list);
+  if (trackHits.size > 5000) trackHits.clear();
+  return list.length > 20;
+}
+const TRACK_MISS = 'We could not find that order. Please check the reference and the phone number you ordered with.';
+
+app.post('/api/track-order', asyncRoute(async (req, res) => {
+  if (trackLimited(req.ip)) return res.status(429).json({ error: 'Too many tries. Please wait a few minutes, or WhatsApp us.' });
+  const fields = {};
+  const ref = String(req.body.ref || '').trim().replace(/^#/, '').toLowerCase();
+  if (!/^[0-9a-z]{8}$/.test(ref)) fields.ref = 'Please enter the 8-character order reference from your message.';
+  const ph = V.phone(req.body.phone); if (!ph.ok) fields.phone = MSG_PHONE;
+  if (Object.keys(fields).length) return fieldErrors(res, fields);
+  const order = (await db.findOrdersByRef(ref)).find((o) => o.type === 'sale' && R.sameNumber(o.customerPhone, ph.value));
+  if (!order) return res.status(404).json({ error: TRACK_MISS });
+
+  const product = order.productId ? await db.getProduct(order.productId).catch(() => null) : null;
+  const done = order.status === 'completed', cancelled = order.status === 'cancelled';
+  const paid = order.paymentStatus === 'paid' || order.status === 'paid' || done;
+  const courier = order.fulfillmentMethod === 'delivery';
+  const steps = [{ label: 'Order received', done: true }, { label: 'Payment confirmed', done: paid }];
+  if (courier) {
+    steps.push({ label: 'Shipped with The Courier Guy', done: !!order.trackingNumber || done, note: order.trackingNumber ? `Tracking number: ${order.trackingNumber}` : '' });
+    steps.push({ label: 'Delivered', done });
+  } else {
+    steps.push({ label: order.fulfillmentMethod === 'meetup' ? 'Meetup completed' : 'Collected', done });
+  }
+  res.json({
+    ref: order.id.slice(0, 8), cancelled, steps,
+    device: product ? `${product.brand} ${product.model}${product.storage ? ' ' + product.storage : ''}` : 'Your device',
+    method: courier ? 'Courier delivery' : (order.fulfillmentMethod === 'meetup' ? 'Meetup' : 'Collection'),
+    total: order.amount, placedAt: order.createdAt
+  });
+}));
+
+app.get('/track', (req, res) => {
+  const base = siteBase(req);
+  edgeCache(res, 300, 86400);
+  res.send(renderView('track.html', {
+    title: 'Track your order | TheTechMart',
+    description: 'Check the status of your TheTechMart order with your order reference and phone number.',
+    canonical: `${base}/track`
+  }, base));
+});
+
 // ================= REFERRALS =================
 // Anyone can get a personal link. It only tags leads: nothing is paid automatically. The owner
 // confirms a sale in admin (payment received and cleared) and pays the referrer 48 hours later.
@@ -921,6 +973,42 @@ app.post('/api/admin/orders/:id/referral', requireAdmin, asyncRoute(async (req, 
   res.status(400).json({ error: 'Invalid action' });
 }));
 
+// Weekly numbers: one row per week (Monday to Sunday, South African time) for the last 8 weeks, plus
+// progress towards the monthly sales target. A "paid sale" is an order of type sale with payment paid.
+const SALES_TARGET = 100;
+app.get('/api/admin/weekly', requireAdmin, asyncRoute(async (req, res) => {
+  const SA = 2 * 3600 * 1000;                                      // South Africa is UTC+2 all year
+  const todayIso = V.todaySA();
+  const dow = new Date(todayIso + 'T00:00:00Z').getUTCDay();       // 0 = Sunday
+  const thisMonday = V.addDays(todayIso, -((dow + 6) % 7));
+  const toUtc = (iso) => new Date(new Date(iso + 'T00:00:00Z').getTime() - SA);
+  const weeks = [];
+  for (let i = 0; i < 8; i++) {
+    const startIso = V.addDays(thisMonday, -7 * i);
+    weeks.push({ startIso, start: toUtc(startIso).toISOString(), end: toUtc(V.addDays(startIso, 7)).toISOString() });
+  }
+  const [events, orders, offers] = await Promise.all([db.getWeeklyEventCounts(weeks), db.listOrders(), db.listOffers()]);
+  const within = (iso, w) => iso && iso >= w.start && iso < w.end;
+  const rows = weeks.map((w, i) => {
+    const sales = orders.filter((o) => o.type === 'sale' && within(new Date(o.createdAt).toISOString(), w));
+    const paid = sales.filter((o) => o.paymentStatus === 'paid');
+    const visits = events[i].pageViews;
+    return {
+      weekStart: w.startIso, visits, whatsappClicks: events[i].whatsapp,
+      offers: offers.filter((o) => within(new Date(o.createdAt).toISOString(), w)).length,
+      orders: sales.length, paidSales: paid.length, revenue: paid.reduce((s, o) => s + Number(o.amount || 0), 0),
+      conversion: visits ? Math.round((paid.length / visits) * 1000) / 10 : 0
+    };
+  });
+  const monthStartIso = todayIso.slice(0, 8) + '01', monthStart = toUtc(monthStartIso).toISOString();
+  const monthPaid = orders.filter((o) => o.type === 'sale' && o.paymentStatus === 'paid' && new Date(o.createdAt).toISOString() >= monthStart);
+  res.json({
+    target: SALES_TARGET,
+    month: { start: monthStartIso, paidSales: monthPaid.length, revenue: monthPaid.reduce((s, o) => s + Number(o.amount || 0), 0), daysLeft: Math.round((Date.UTC(Number(todayIso.slice(0, 4)), Number(todayIso.slice(5, 7)), 1) - new Date(todayIso + 'T00:00:00Z').getTime()) / 864e5) },
+    weeks: rows
+  });
+}));
+
 app.get('/api/admin/analytics', requireAdmin, asyncRoute(async (req, res) => {
   res.json(await db.getAnalyticsSummary());
 }));
@@ -1052,7 +1140,7 @@ function renderView(name, { title, description, canonical, ogImage, ogType = 'we
 app.get('/sitemap.xml', asyncRoute(async (req, res) => {
   const base = siteBase(req);
   const products = await db.listProducts({ activeOnly: true });
-  const staticUrls = ['', '/sell', '/meetup', '/refer', '/policies', '/terms', '/privacy', '/photo-credits'];
+  const staticUrls = ['', '/sell', '/meetup', '/refer', '/track', '/policies', '/terms', '/privacy', '/photo-credits'];
   const urls = [
     ...staticUrls.map((p) => `<url><loc>${base}${p}</loc><changefreq>daily</changefreq></url>`),
     ...products.map((p) => `<url><loc>${base}/product?id=${p.id}</loc><changefreq>weekly</changefreq></url>`)

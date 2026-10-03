@@ -312,6 +312,16 @@ async function updateOrder(id, patch) {
   return data ? orderOut(data) : null;
 }
 
+// Order lookup by the short reference customers see (first 8 characters of the order id).
+async function findOrdersByRef(prefix) {
+  const p = String(prefix || '').toLowerCase();
+  if (!/^[0-9a-f]{8}$/.test(p)) return [];
+  const { data, error } = await supabase.from('orders').select('*')
+    .gte('id', `${p}-0000-0000-0000-000000000000`).lte('id', `${p}-ffff-ffff-ffff-ffffffffffff`).limit(5);
+  check(error);
+  return (data || []).map(orderOut);
+}
+
 // ---------- referrers ----------
 async function upsertReferrer({ code, name, phone }) {
   const { data, error } = await supabase.from('referrers').upsert({ code, name, phone }, { onConflict: 'code' }).select().single();
@@ -327,6 +337,20 @@ async function listReferrers() {
   const { data, error } = await supabase.from('referrers').select('*').order('created_at', { ascending: false });
   if (error) return [];
   return data;
+}
+
+// Counts of page views, WhatsApp clicks and offers for each [start, end) week (ISO strings).
+async function getWeeklyEventCounts(weeks) {
+  const countOf = async (type, w) => {
+    const { count, error } = await supabase.from('events').select('*', { count: 'exact', head: true })
+      .eq('type', type).gte('created_at', w.start).lt('created_at', w.end);
+    check(error);
+    return count || 0;
+  };
+  return Promise.all(weeks.map(async (w) => {
+    const [pageViews, whatsapp, offers] = await Promise.all([countOf('page_view', w), countOf('whatsapp_click', w), countOf('offer_submitted', w)]);
+    return { pageViews, whatsapp, offers };
+  }));
 }
 
 // ---------- events (lightweight first-party analytics) ----------
@@ -374,6 +398,6 @@ module.exports = {
   addOffer, getOffer, listOffers, updateOfferStatus, updateOfferDocs, acceptOffer,
   addTradein, listTradeins, updateTradeinStatus, acceptTradein,
   addOrder, getOrder, listOrders, updateOrder,
-  upsertReferrer, getReferrer, listReferrers,
+  upsertReferrer, getReferrer, listReferrers, findOrdersByRef, getWeeklyEventCounts,
   logEvent, getAnalyticsSummary
 };

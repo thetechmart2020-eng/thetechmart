@@ -413,3 +413,10 @@ input[type=date] { color-scheme: dark; }
 .consent a { color: var(--accent); }
 .consent-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 @media (min-width: 900px) { .consent { left: auto; right: 20px; bottom: 20px; margin: 0; } }
+
+/* Order tracking steps */
+.track-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.track-steps li { display: flex; gap: 12px; align-items: flex-start; color: var(--muted); }
+.track-steps li.done { color: var(--text); }
+.track-steps .dot { flex: none; width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--line); display: grid; place-items: center; font-size: 14px; font-weight: 700; }
+.track-steps li.done .dot { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }

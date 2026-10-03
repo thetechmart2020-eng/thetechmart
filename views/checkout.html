@@ -194,7 +194,7 @@
       '<p>Thank you. Your order reference is <strong>' + T.esc(ref) + '</strong>. Total: <strong>' + T.money(r.total) + '</strong> (' + (r.deliveryFee ? 'device plus ' + T.money(r.deliveryFee) + ' delivery' : (r.fulfillmentMethod === 'meetup' ? 'device plus ' + T.money(T.meetupFee) + ' meetup fee' : 'collection, no delivery fee')) + '). ' + (r.preOrder ? 'This device is a pre-order, so we will confirm availability with you. ' : '') +
       'Press send in ' + (channel === 'email' ? 'your email app' : 'WhatsApp') + ' so we can confirm payment and delivery.</p>' +
       '<a class="btn btn-primary btn-block" id="open-ch" data-custom ' + (channel === 'email' ? '' : 'data-wa target="_blank" rel="noopener"') + ' href="' + T.esc(url) + '">' + (channel === 'email' ? 'Open email' : 'Open WhatsApp') + '</a>' +
-      '<p style="margin-top:14px"><a class="link-arrow" href="/">Back to the shop</a></p></div>';
+      '<p style="margin-top:14px"><a class="link-arrow" href="/track?order=' + encodeURIComponent(ref) + '">Track your order</a> &nbsp;·&nbsp; <a class="link-arrow" href="/">Back to the shop</a></p></div>';
     window.scrollTo({ top: 0, behavior: 'smooth' });
     // Direct navigation (not window.open) so mobile popup blockers cannot stop it; the button above is the fallback.
     setTimeout(function () { location.href = url; }, 700);

@@ -17,6 +17,7 @@
     <button class="admin-tab" data-tab="offers">Offers <span class="count" id="c-offers"></span></button>
     <button class="admin-tab" data-tab="tradeins">Trade-ins <span class="count" id="c-tradeins"></span></button>
     <button class="admin-tab" data-tab="orders">Orders <span class="count" id="c-orders"></span></button>
+    <button class="admin-tab" data-tab="numbers">Numbers</button>
     <button class="admin-tab" data-tab="followups">Follow-ups <span class="count" id="c-followups"></span></button>
     <button class="admin-tab" data-tab="referrals">Referrals <span class="count" id="c-referrals"></span></button>
     <button class="admin-tab" data-tab="analytics">Analytics</button>
@@ -84,6 +85,21 @@
       <p class="helper" style="margin-bottom:16px;">Created automatically when a customer checks out, or when you accept an offer (sale) or a trade-in (purchase). Move each through its pipeline as it happens in real life.</p>
       <table class="table" id="orders-table">
         <thead><tr><th>Type</th><th>Customer</th><th>Delivery</th><th>Payment</th><th>Amount</th><th>Status</th><th>Documents</th><th>Date</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="admin-panel" id="panel-numbers">
+      <div class="admin-head"><h2>Weekly numbers</h2></div>
+      <div class="stat-card" style="margin-bottom:18px;max-width:560px;">
+        <div class="helper">This month: paid sales against the target</div>
+        <div style="font-size:30px;font-weight:700;margin:6px 0;"><span id="nm-paid">0</span> <span class="helper" style="font-size:16px;">of <span id="nm-target">100</span></span></div>
+        <div style="height:10px;background:var(--surface-2);border-radius:6px;overflow:hidden;"><div id="nm-bar" style="height:100%;width:0;background:var(--accent);"></div></div>
+        <div class="helper" style="margin-top:8px;" id="nm-note"></div>
+      </div>
+      <p class="helper" style="margin-bottom:12px;">Weeks run Monday to Sunday. A paid sale is an order with payment marked paid, counted in the week the order was placed. Conversion is paid sales divided by site visits.</p>
+      <table class="table" id="numbers-table">
+        <thead><tr><th>Week from</th><th>Visits</th><th>WhatsApp clicks</th><th>Offers</th><th>Orders</th><th>Paid sales</th><th>Revenue</th><th>Conversion</th></tr></thead>
         <tbody></tbody>
       </table>
     </section>
@@ -184,6 +200,7 @@ document.querySelectorAll('.admin-tab[data-tab]').forEach(btn => {
     document.querySelectorAll('.admin-panel').forEach(p => p.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'numbers') loadNumbers().catch(() => toast('Could not load the numbers'));
     if (btn.dataset.tab === 'analytics') loadAnalytics().catch(() => toast('Analytics not set up yet — run the migration SQL in Supabase'));
   });
 });
@@ -442,6 +459,18 @@ async function updateOrderStatus(id, status) {
   await api(`/api/admin/orders/${id}`, { method: 'PUT', body: { status } });
   toast('Order updated');
   loadAll();
+}
+
+async function loadNumbers() {
+  const n = await api('/api/admin/weekly');
+  document.getElementById('nm-paid').textContent = n.month.paidSales;
+  document.getElementById('nm-target').textContent = n.target;
+  document.getElementById('nm-bar').style.width = Math.min(100, Math.round(n.month.paidSales / n.target * 100)) + '%';
+  document.getElementById('nm-note').textContent = `Revenue this month: ${fmtPrice(n.month.revenue)}. ${n.month.daysLeft} days left. ` +
+    (n.month.paidSales >= n.target ? 'Target reached.' : `${n.target - n.month.paidSales} more paid sales needed (about ${Math.ceil((n.target - n.month.paidSales) / Math.max(1, n.month.daysLeft) * 10) / 10} a day).`);
+  const d = (iso) => new Date(iso + 'T00:00:00').toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' });
+  document.querySelector('#numbers-table tbody').innerHTML = n.weeks.map((w, i) => `
+    <tr><td>${d(w.weekStart)}${i === 0 ? ' <span class="helper">(this week)</span>' : ''}</td><td>${w.visits}</td><td>${w.whatsappClicks}</td><td>${w.offers}</td><td>${w.orders}</td><td><b>${w.paidSales}</b></td><td class="mono">${fmtPrice(w.revenue)}</td><td>${w.conversion}%</td></tr>`).join('');
 }
 
 async function loadAnalytics() {
