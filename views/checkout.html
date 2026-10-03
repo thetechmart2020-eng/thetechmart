@@ -58,8 +58,8 @@
           '<section class="box"><h2>How would you like to get it?</h2>' +
             '<div class="choice" id="ful">' +
               '<label><input type="radio" name="fulfillmentMethod" value="delivery" checked><span>Courier: ' + T.money(FEE) + ' flat, nationwide<small>The Courier Guy, about 2 days, to your South African address</small></span></label>' +
-              '<label><input type="radio" name="fulfillmentMethod" value="collection"><span>Collection: R0<small>North Riding / Kya Sands. Exact location shared on WhatsApp</small></span></label>' +
-              '<label><input type="radio" name="fulfillmentMethod" value="meetup"><span>Meetup: ' + T.money(T.meetupFee) + '<small>Saturdays and Sundays only, booked 2 days ahead. Special request fee</small></span></label>' +
+              '<label><input type="radio" name="fulfillmentMethod" value="collection"><span>Collection: R0<small>Arranged with us on WhatsApp</small></span></label>' +
+              '<label><input type="radio" name="fulfillmentMethod" value="meetup"><span>Meetup: R0<small>By appointment, with 2 days\' notice</small></span></label>' +
             '</div>' +
             '<div id="addr" style="margin-top:16px">' +
               '<div class="field"><label for="c-line1">Street address</label><input id="c-line1" name="line1" autocomplete="address-line1" placeholder="Street and number, unit or complex" maxlength="120"></div>' +
@@ -74,7 +74,7 @@
               '<div class="row2"><div class="field"><label for="c-mdate">Preferred date</label><input id="c-mdate" name="meetupDate" type="date"></div>' +
               '<div class="field"><label for="c-mslot">Time slot</label><select id="c-mslot" name="meetupSlot"><option value="">Choose a slot</option>' +
                 Object.keys(fv.SLOTS).map(function (k) { return '<option value="' + k + '">' + fv.SLOTS[k] + '</option>'; }).join('') + '</select></div></div>' +
-              '<p class="notice"><strong>Meetups are on Saturdays and Sundays only and need 2 days\' notice</strong> so we can get the device to our sales agent. The ' + T.money(T.meetupFee) + ' meetup fee is added to the device price because a meetup is a special request outside our normal sales process. It cannot be cancelled or refunded once the device is with our sales agent.</p>' +
+              '<p class="notice"><strong>Meetups need 2 days\' notice</strong> so we can get the device to our sales agent. Today and tomorrow cannot be booked.</p>' +
             '</div>' +
           '</section>' +
           '<section class="box"><h2>Your details</h2>' +
@@ -115,9 +115,9 @@
 
     // Courier: address, flat fee, no cash. Collection and meetup: no fee, cash allowed (never for courier).
     function syncFulfil() {
-      var m = form.fulfillmentMethod.value, courier = m === 'delivery', fee = courier ? FEE : (m === 'meetup' ? T.meetupFee : 0);
+      var m = form.fulfillmentMethod.value, courier = m === 'delivery', fee = courier ? FEE : 0;
       $('addr').hidden = !courier; $('meet').hidden = m !== 'meetup';
-      $('del-label').textContent = courier ? 'Delivery (The Courier Guy, about 2 days)' : (m === 'meetup' ? 'Meetup fee (special request)' : 'Collection');
+      $('del-label').textContent = courier ? 'Delivery (The Courier Guy, about 2 days)' : (m === 'meetup' ? 'Meetup' : 'Collection');
       $('del-amt').textContent = T.money(fee);
       $('total-amt').textContent = T.money(p.price + fee);
       $('cash-opt').hidden = courier; $('pay-note').hidden = m !== 'meetup';
@@ -190,7 +190,7 @@
     var url = channel === 'email' ? r.mailtoUrl : r.whatsappUrl, ref = r.order.id.slice(0, 8);
     $('co-root').innerHTML =
       '<div class="box ok-box"><div class="tick">' + T.I.tick + '</div><h1>Order placed</h1>' +
-      '<p>Thank you. Your order reference is <strong>' + T.esc(ref) + '</strong>. Total: <strong>' + T.money(r.total) + '</strong> (' + (r.deliveryFee ? 'device plus ' + T.money(r.deliveryFee) + ' delivery' : (r.fulfillmentMethod === 'meetup' ? 'device plus ' + T.money(T.meetupFee) + ' meetup fee' : 'collection, no delivery fee')) + '). ' + (r.preOrder ? 'This device is a pre-order, so we will confirm availability with you. ' : '') +
+      '<p>Thank you. Your order reference is <strong>' + T.esc(ref) + '</strong>. Total: <strong>' + T.money(r.total) + '</strong> (' + (r.deliveryFee ? 'device plus ' + T.money(r.deliveryFee) + ' delivery' : (r.fulfillmentMethod === 'meetup' ? 'meetup, no delivery fee' : 'collection, no delivery fee')) + '). ' + (r.preOrder ? 'This device is a pre-order, so we will confirm availability with you. ' : '') +
       'Press send in ' + (channel === 'email' ? 'your email app' : 'WhatsApp') + ' so we can confirm payment and delivery.</p>' +
       '<a class="btn btn-primary btn-block" id="open-ch" data-custom ' + (channel === 'email' ? '' : 'data-wa target="_blank" rel="noopener"') + ' href="' + T.esc(url) + '">' + (channel === 'email' ? 'Open email' : 'Open WhatsApp') + '</a>' +
       '<p style="margin-top:14px"><a class="link-arrow" href="/">Back to the shop</a></p></div>';
