@@ -317,3 +317,6 @@ body.has-bar { padding-bottom: var(--bar-h); }
 .rev-card figcaption a { color: var(--accent); }
 .rev-links { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 8px; }
 .rev-widget { min-height: 120px; margin-bottom: 16px; }
+
+.rated { margin-top: 16px; font-size: 15px; }
+.rated a { color: var(--accent); text-underline-offset: 3px; }

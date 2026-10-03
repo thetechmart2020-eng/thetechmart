@@ -813,6 +813,7 @@ function renderView(name, { title, description, canonical, ogImage, ogType = 'we
     .replace('<!--HEADER-->', readView('partials/header.html'))
     .replace('<!--FOOTER-->', readView('partials/footer.html').replace('<!--FBLINK-->', footerSocial()))
     .replace('<!--REVIEWS-->', () => reviewsHtml())
+    .replace('<!--RATED-->', () => (reviewsHtml() ? '<p class="rated"><a href="#reviews">Rated by real customers. See their reviews</a></p>' : ''))
     // Trading hours / returns / delivery text lives in ONE partial, used by the footer and the /policies page.
     .split('<!--POLICY-->').join(readView('partials/policy.html'));
   const tokens = {

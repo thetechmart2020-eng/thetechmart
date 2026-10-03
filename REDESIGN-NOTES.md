@@ -26,5 +26,6 @@ Grade A-B (Like new / Good), New shown as New, Fair/damaged show their real cond
 
 ## Update log (October 2026)
 - Checkout summary: the "Photo coming soon" placeholder no longer spreads over the Delivery row (`.summary .thumb` is now positioned). File: `public/css/site.css`.
+- Hero link "Rated by real customers" jumps to the reviews (hidden automatically if no reviews are set up). Reviews sit right under the trust strip.
 - Reviews section on the home page: Elfsight Facebook widget, optional manual cards (WhatsApp screenshots, Google later), Facebook button and footer link. Files: `server.js`, `views/index.html`, `views/partials/footer.html`, `public/css/site.css`, `data/reviews.json`, `data/HOW-TO-ADD-REVIEWS.md`. The section is empty-safe: it hides if there is no widget id and no manual reviews.
 - Rollback for any of these: promote the previous Vercel deployment.
