@@ -3,4 +3,4 @@ Allow: /
 Disallow: /admin
 Disallow: /api
 
-Sitemap: /sitemap.xml
+Sitemap: https://thetechmart.co.za/sitemap.xml
