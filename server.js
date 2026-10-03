@@ -17,6 +17,7 @@ const V = require('./lib/validate');
 // Flat Courier Guy delivery fee in rand. Collection is R0. This is the ONE place the fee is set:
 // checkout, the saved order, the WhatsApp/email message, the Yoco amount and the site text all use it.
 const DELIVERY_FEE = 100;
+const MEETUP_FEE = V.MEETUP_FEE;   // R200 special-request surcharge, on top of the device price
 const MAX_PHOTOS = 5;
 
 const app = express();
@@ -141,7 +142,7 @@ function cardProduct(p) {
 function publicConfig(cfg) {
   return {
     storeName: cfg.storeName, whatsapp: cfg.whatsappNumber, whatsappDisplay: waDisplay(cfg.whatsappNumber),
-    email: cfg.contactEmail, deliveryFee: DELIVERY_FEE
+    email: cfg.contactEmail, deliveryFee: DELIVERY_FEE, meetupFee: MEETUP_FEE
   };
 }
 
@@ -400,7 +401,7 @@ app.post('/api/checkout', asyncRoute(async (req, res) => {
   if (Object.keys(fields).length) return fieldErrors(res, fields);
 
   // One server-side total: device price + flat delivery (R0 for collection and meetups).
-  const deliveryFee = method === 'delivery' ? DELIVERY_FEE : 0;
+  const deliveryFee = method === 'delivery' ? DELIVERY_FEE : (method === 'meetup' ? MEETUP_FEE : 0);
   const total = Number(product.price) + deliveryFee;
   const phone = ph.value, email = em.value;
 
@@ -426,7 +427,7 @@ app.post('/api/checkout', asyncRoute(async (req, res) => {
 
   const addressLine = method === 'delivery'
     ? `${address.line1}${address.line2 ? ', ' + address.line2 : ''}, ${address.city}, ${address.postalCode}${address.province ? ', ' + address.province : ''}`
-    : (method === 'meetup' ? `Meetup on ${meetup.date}, ${meetup.slotLabel}, ${meetup.area}` : 'Collection (arranged on WhatsApp)');
+    : (method === 'meetup' ? `Meetup on ${meetup.date}, ${meetup.slotLabel}, ${meetup.area}` : 'Collection, North Riding / Kya Sands (exact location shared on WhatsApp)');
 
   if (wantsGateway) {
     try {
@@ -441,7 +442,7 @@ app.post('/api/checkout', asyncRoute(async (req, res) => {
   }
 
   const prefLabel = { card: 'Card (Yoco)', eft: 'EFT / bank transfer', cash: 'Cash on collection (meetup or pickup only)' }[paymentPreference] || '';
-  const summary = `Hi TheTechMart! I'd like to buy this device.\n\nDevice: ${product.brand} ${product.model}${product.storage ? ' · ' + product.storage : ''}\nDevice price: R${product.price}\nDelivery: ${method === 'delivery' ? 'R' + deliveryFee + ' (flat, The Courier Guy, about 2 days)' : (method === 'meetup' ? 'R0 (meetup)' : 'R0 (collection)')}\nTotal: R${total}\nName: ${name}\nEmail: ${email}\nContact: ${phone}\nFulfillment: ${method === 'delivery' ? 'Courier Guy delivery to ' + addressLine : addressLine}\n${prefLabel ? 'Payment: ' + prefLabel + '\n' : ''}${isPreOrder ? 'Pre-order: yes\n' : ''}${notes ? 'Notes: ' + notes : ''}\n\n(Order ref: ${order.id.slice(0, 8)})`;
+  const summary = `Hi TheTechMart! I'd like to buy this device.\n\nDevice: ${product.brand} ${product.model}${product.storage ? ' · ' + product.storage : ''}\nDevice price: R${product.price}\n${method === 'meetup' ? 'Meetup fee' : 'Delivery'}: ${method === 'delivery' ? 'R' + deliveryFee + ' (flat, The Courier Guy, about 2 days)' : (method === 'meetup' ? 'R' + deliveryFee + ' (meetup fee, special request, not refundable once the device is with our sales agent)' : 'R0 (collection)')}\nTotal: R${total}\nName: ${name}\nEmail: ${email}\nContact: ${phone}\nFulfillment: ${method === 'delivery' ? 'Courier Guy delivery to ' + addressLine : addressLine}\n${prefLabel ? 'Payment: ' + prefLabel + '\n' : ''}${isPreOrder ? 'Pre-order: yes\n' : ''}${notes ? 'Notes: ' + notes : ''}\n\n(Order ref: ${order.id.slice(0, 8)})`;
 
   res.json({
     order,
@@ -473,16 +474,16 @@ app.post('/api/meetups', asyncRoute(async (req, res) => {
     type: 'sale', source: 'meetup', productId: product.id,
     customerName: name, customerPhone: ph.value, customerEmail: emailVal,
     deliveryAddress: { meetup }, fulfillmentMethod: 'meetup', courier: 'Meetup',
-    paymentMethod: 'manual', paymentStatus: 'pending', amount: Number(product.price),
+    paymentMethod: 'manual', paymentStatus: 'pending', amount: Number(product.price) + MEETUP_FEE,
     notes: `[MEETUP REQUEST ${meetup.date} ${meetup.slotLabel} at ${meetup.area}] ${notes}`.trim()
   });
   await db.logEvent({ type: 'offer_submitted', productId: product.id }).catch(() => {});
 
   const cfg = await db.getConfig();
   const dev = `${product.brand} ${product.model}${product.storage ? ' · ' + product.storage : ''}`;
-  const msg = `Hi TheTechMart! I'd like to book a meetup.\n\nDevice: ${dev} (R${product.price})\nPreferred date: ${meetup.date}\nTime slot: ${meetup.slotLabel}\nMeetup area: ${meetup.area}\nName: ${name}\nContact: ${ph.value}\n${notes ? 'Note: ' + notes + '\n' : ''}\n(Meetup ref: ${order.id.slice(0, 8)})`;
+  const msg = `Hi TheTechMart! I'd like to book a meetup.\n\nDevice: ${dev} (R${product.price})\nMeetup fee: R${MEETUP_FEE} (special request, not refundable once the device is with our sales agent)\nTotal: R${Number(product.price) + MEETUP_FEE}\nPreferred date: ${meetup.date}\nTime slot: ${meetup.slotLabel}\nMeetup area: ${meetup.area}\nName: ${name}\nContact: ${ph.value}\n${notes ? 'Note: ' + notes + '\n' : ''}\n(Meetup ref: ${order.id.slice(0, 8)})`;
   res.json({
-    order, ref: order.id.slice(0, 8),
+    order, ref: order.id.slice(0, 8), total: Number(product.price) + MEETUP_FEE, meetupFee: MEETUP_FEE,
     whatsappUrl: waLink(cfg.whatsappNumber, msg),
     mailtoUrl: mailtoLink(cfg.contactEmail, `Meetup request: ${dev} (ref ${order.id.slice(0, 8)})`, msg)
   });
@@ -786,7 +787,7 @@ function orderItems(order, product) {
   const price = product ? Number(product.price) : Number(order.amount);
   const delivery = Number(order.amount) - price;
   const items = [{ label, amount: delivery > 0 ? price : Number(order.amount) }];
-  if (delivery > 0) items.push({ label: 'Courier Guy delivery (flat)', amount: delivery });
+  if (delivery > 0) items.push({ label: order.fulfillmentMethod === 'meetup' ? 'Meetup fee (special request)' : 'Courier Guy delivery (flat)', amount: delivery });
   return items;
 }
 

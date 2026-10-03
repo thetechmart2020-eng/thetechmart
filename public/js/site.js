@@ -44,9 +44,11 @@
     minMeetup: function () { return fv.addDays(fv.today(), 2); },      // meetups need 2 days' notice
     maxMeetup: function () { return fv.addDays(fv.today(), 60); },
     isSunday: function (iso) { return new Date(iso + 'T00:00:00Z').getUTCDay() === 0; },
+    isWeekend: function (iso) { var d = new Date(iso + 'T00:00:00Z').getUTCDay(); return d === 0 || d === 6; },
     meetupDate: function (v) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(v || '')) return 'Please choose a meetup date.';
       if (v < fv.minMeetup()) return "Meetups need 2 days' notice. Please pick a later date.";
+      if (!fv.isWeekend(v)) return 'Meetups are on Saturdays and Sundays only. Please pick a weekend date.';
       if (v > fv.maxMeetup()) return 'Please pick a date within the next 60 days.';
       return '';
     },
@@ -140,6 +142,7 @@
   // Normal-price devices: 3-month warranty. Negotiated (special-price) devices, flagged by lib/deals.js: 21-day warranty.
   function warrantyBadge(p) { return p.deal ? '21-day warranty (negotiated device)' : '3-month warranty'; }
   var DELIVERY_FEE = (cfg && cfg.deliveryFee != null) ? cfg.deliveryFee : 100;
+  var MEETUP_FEE = (cfg && cfg.meetupFee != null) ? cfg.meetupFee : 200;
   function isSold(p) { return !!p.sold || Number(p.stock) < 1; }
   function stockLine(p) {
     var n = Number(p.stock);
@@ -228,5 +231,5 @@
 
   window.TTM = { boot: boot, cfg: cfg, esc: esc, money: money, waLink: waLink, track: track, api: api, toast: toast, I: I, CATS: CATS,
     gradeBadge: gradeBadge, warrantyBadge: warrantyBadge, isSold: isSold, stockLine: stockLine, media: media, card: card,
-    skeletons: skeletons, deviceName: deviceName, deliveryFee: DELIVERY_FEE, fv: fv };
+    skeletons: skeletons, deviceName: deviceName, deliveryFee: DELIVERY_FEE, meetupFee: MEETUP_FEE, fv: fv };
 })();
