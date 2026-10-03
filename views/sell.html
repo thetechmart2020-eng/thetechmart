@@ -34,26 +34,27 @@
         </div>
         <input type="hidden" name="type" value="sell">
         <div class="row2">
-          <div class="field"><label for="t-brand">Brand</label><input id="t-brand" name="brand" placeholder="e.g. Apple" required></div>
-          <div class="field"><label for="t-model">Model</label><input id="t-model" name="model" placeholder="e.g. iPhone 13" required></div>
+          <div class="field"><label for="t-brand">Brand</label><input id="t-brand" name="brand" placeholder="e.g. Apple" maxlength="60" required></div>
+          <div class="field"><label for="t-model">Model</label><input id="t-model" name="model" placeholder="e.g. iPhone 13" maxlength="80" required></div>
         </div>
         <div class="row2">
-          <div class="field"><label for="t-storage">Storage (optional)</label><input id="t-storage" name="storage" placeholder="e.g. 128GB"></div>
+          <div class="field"><label for="t-storage">Storage (optional)</label><input id="t-storage" name="storage" placeholder="e.g. 128GB" maxlength="30"></div>
           <div class="field"><label for="t-cond">Condition</label>
             <select id="t-cond" name="condition"><option>Like new</option><option selected>Good</option><option>Fair</option><option>Damaged / for parts</option></select></div>
         </div>
-        <div class="field"><label for="t-price">Your asking price in rand (optional)</label><input id="t-price" name="askingPrice" type="number" inputmode="numeric" min="0" placeholder="e.g. 6000"></div>
+        <div class="field"><label for="t-price">Your asking price in rand (optional)</label><input id="t-price" name="askingPrice" type="number" inputmode="numeric" min="1" max="1000000" step="1" placeholder="e.g. 6000"></div>
         <div class="field">
           <label for="photos">Photos (screen, back, any damage)</label>
-          <input id="photos" type="file" accept="image/*" multiple hidden>
-          <div class="drop" id="drop" role="button" tabindex="0">Tap to add photos (up to 6)</div>
+          <input id="photos" name="photosInput" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden>
+          <div class="drop" id="drop" role="button" tabindex="0">Tap to add photos (1 to 6)</div>
+          <p class="card-sub" style="margin:6px 0 0">JPG, PNG or WebP, up to 8 MB each.</p>
           <div class="previews" id="previews"></div>
         </div>
         <div class="row2">
-          <div class="field"><label for="t-name">Your name</label><input id="t-name" name="name" autocomplete="name" required></div>
-          <div class="field"><label for="t-phone">Phone (WhatsApp)</label><input id="t-phone" name="phone" type="tel" autocomplete="tel" placeholder="082 123 4567" required></div>
+          <div class="field"><label for="t-name">Your name</label><input id="t-name" name="name" autocomplete="name" maxlength="80" required></div>
+          <div class="field"><label for="t-phone">Phone (WhatsApp)</label><input id="t-phone" name="phone" type="tel" autocomplete="tel" placeholder="082 123 4567" maxlength="20" required></div>
         </div>
-        <div class="field"><label for="t-notes">Anything else? (optional)</label><textarea id="t-notes" name="notes" placeholder="Battery health, accessories included, faults"></textarea></div>
+        <div class="field"><label for="t-notes">Anything else? (optional)</label><textarea id="t-notes" name="notes" maxlength="800" placeholder="Battery health, accessories included, faults"></textarea></div>
         <button class="btn btn-primary btn-block" type="submit" data-ch="whatsapp">Send on WhatsApp</button>
         <button class="btn btn-ghost btn-block" type="submit" data-ch="email" style="margin-top:10px">Send by email</button>
         <p class="err" id="t-err" role="alert"></p>
@@ -111,27 +112,50 @@
       img.src = url;
     });
   }
-  $('drop').addEventListener('click', function () { $('photos').click(); });
-  $('drop').addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('photos').click(); } });
+  var TYPES = ['image/jpeg', 'image/png', 'image/webp'], MAX_BYTES = 8 * 1024 * 1024, fv = T.fv;
+  var drop = $('drop'), photoErr = '';
+  drop.addEventListener('click', function () { $('photos').click(); });
+  drop.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('photos').click(); } });
   $('photos').addEventListener('change', async function () {
-    var files = Array.from(this.files).slice(0, 6);
-    $('drop').textContent = 'Preparing photos...';
-    photos = await Promise.all(files.map(shrink));
+    var picked = Array.from(this.files), msg = '';
+    if (!picked.length) return;
+    if (picked.length > 6) msg = 'You can add up to 6 photos. We kept the first 6.';
+    picked = picked.slice(0, 6);
+    var bad = picked.filter(function (f) { return TYPES.indexOf(f.type) < 0; }), big = picked.filter(function (f) { return f.size > MAX_BYTES; });
+    if (bad.length) msg = 'Photos must be JPG, PNG or WebP pictures. HEIC and other formats are not accepted.';
+    else if (big.length) msg = 'One of your photos is too big. Each photo must be under 8 MB.';
+    if (bad.length || big.length) { photos = []; $('previews').innerHTML = ''; drop.textContent = 'Tap to add photos (1 to 6)'; fv.setErr(drop, msg); this.value = ''; return; }
+    fv.setErr(drop, msg);
+    drop.textContent = 'Preparing photos...';
+    photos = await Promise.all(picked.map(shrink));
     $('previews').innerHTML = '';
     photos.forEach(function (f) { var i = document.createElement('img'); i.alt = 'Selected photo'; i.src = URL.createObjectURL(f); $('previews').appendChild(i); });
-    $('drop').textContent = photos.length ? photos.length + ' photo(s) added. Tap to change' : 'Tap to add photos (up to 6)';
+    drop.textContent = photos.length + ' photo' + (photos.length === 1 ? '' : 's') + ' added. Tap to change';
   });
 
-  var channel = 'whatsapp';
-  document.querySelectorAll('#tradein-form button[type=submit]').forEach(function (b) { b.addEventListener('click', function () { channel = b.dataset.ch; }); });
-  $('tradein-form').addEventListener('submit', async function (e) {
+  var channel = 'whatsapp', form = $('tradein-form');
+  form.querySelectorAll('button[type=submit]').forEach(function (b) { b.addEventListener('click', function () { channel = b.dataset.ch; }); });
+  var rules = [
+    { name: 'brand', check: function (v) { return fv.clean(v, 60).length < 2 ? 'Please enter the brand, for example Apple.' : ''; } },
+    { name: 'model', check: function (v) { return fv.clean(v, 80).length < 1 ? 'Please enter the model, for example iPhone 13.' : ''; } },
+    { name: 'condition', check: function (v) { return !v ? 'Please choose the condition of your device.' : ''; } },
+    { name: 'askingPrice', check: function (v) { if (!v) return ''; var n = Number(v); return (!isFinite(n) || n < 1 || n > 1000000) ? 'Please enter a price in rand between R1 and R1 000 000, or leave it empty.' : ''; } },
+    { el: drop, name: 'photosInput', check: function () { return photos.length < 1 ? 'Please add at least 1 photo (up to 6).' : ''; } },
+    { name: 'name', check: function (v) { return fv.clean(v, 80).length < 2 ? fv.MSG.name : ''; } },
+    { name: 'phone', check: function (v) { return !fv.phone(v) ? fv.MSG.phone : ''; } }
+  ];
+  fv.live(form, rules.filter(function (r) { return !r.el; }));
+  form.addEventListener('submit', async function (e) {
     e.preventDefault();
     var f = e.target, err = $('t-err'); err.classList.remove('show');
-    if (!f.brand.value.trim() || !f.model.value.trim() || !f.name.value.trim() || !f.phone.value.trim()) {
-      err.textContent = 'Please add the brand, model, your name and phone number.'; err.classList.add('show'); return;
-    }
-    var fd = new FormData(f); photos.forEach(function (p) { fd.append('photos', p); });
-    var btns = f.querySelectorAll('button[type=submit]'); btns.forEach(function (b) { b.disabled = true; });
+    // run() clears old messages first, so keep a photo-type or size warning shown while there are no valid photos.
+    if (!fv.run(f, rules)) { err.textContent = 'Please fix the highlighted fields.'; err.classList.add('show'); return; }
+    var fd = new FormData();
+    ['type', 'brand', 'model', 'storage', 'condition', 'askingPrice', 'name', 'phone', 'notes'].forEach(function (k) {
+      fd.append(k, k === 'phone' || k === 'type' || k === 'condition' || k === 'askingPrice' ? f[k].value.trim() : fv.clean(f[k].value, k === 'notes' ? 800 : 80));
+    });
+    photos.forEach(function (p) { fd.append('photos', p); });
+    var unlock = fv.lock(f);
     try {
       var r = await T.api('/api/tradeins', { method: 'POST', body: fd });
       var url = channel === 'email' ? r.mailtoUrl : r.whatsappUrl;
@@ -140,7 +164,10 @@
       window.scrollTo({ top: 0, behavior: 'smooth' });
       setTimeout(function () { location.href = url; }, 700);
     } catch (ex) {
-      err.textContent = ex.message; err.classList.add('show'); btns.forEach(function (b) { b.disabled = false; });
+      var fields = ex.fields ? Object.assign({}, ex.fields) : null;
+      if (fields && fields.photos) { fv.setErr(drop, fields.photos); delete fields.photos; }
+      if (fields && Object.keys(fields).length) fv.apply(f, fields);
+      err.textContent = fields ? 'Please fix the highlighted fields.' : ex.message; err.classList.add('show'); unlock();
     }
   });
 })();

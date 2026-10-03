@@ -110,8 +110,9 @@ p { margin: 0; }
 @media (min-width: 1060px) { .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; transition: border-color .2s ease, transform .2s ease; animation: fade .35s ease both; }
 .card:hover { border-color: #3b4a40; transform: translateY(-2px); }
-.card-media { position: relative; display: block; aspect-ratio: 1 / 1; background: linear-gradient(160deg, #1b2025, #121518); }
-.card-media img { width: 100%; height: 100%; object-fit: contain; padding: 10px; }
+.card-media { position: relative; display: block; aspect-ratio: 1 / 1; overflow: hidden; background: linear-gradient(100deg, #161a1e 30%, #20262b 50%, #161a1e 70%) 0 0 / 200% 100%; animation: shimmer 1.4s linear infinite; }
+.card-media img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: 10px; background: #fff0; }
+.card-media:has(.card-ph) { animation: none; background: linear-gradient(160deg, #1b2025, #121518); }
 .card-body { padding: 12px 12px 14px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
 .card-title { font: 600 16px/1.25 var(--font-display); text-decoration: none; }
 .card-sub { color: var(--muted); font-size: 14px; }
@@ -142,7 +143,7 @@ p { margin: 0; }
 /* ---------- categories ---------- */
 .cats { display: grid; gap: 12px; grid-template-columns: repeat(2, 1fr); }
 @media (min-width: 700px) { .cats { grid-template-columns: repeat(3, 1fr); } }
-@media (min-width: 1000px) { .cats { grid-template-columns: repeat(6, 1fr); } }
+@media (min-width: 1000px) { .cats { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); } }
 .cat { background: var(--surface); border: 1px solid var(--line); color: var(--text); border-radius: var(--radius); min-height: 112px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; cursor: pointer; font: 600 16px var(--font-body); transition: border-color .2s, color .2s; }
 .cat svg { width: 34px; height: 34px; color: var(--accent); }
 .cat:hover, .cat[aria-pressed="true"] { border-color: var(--accent); }
@@ -316,7 +317,10 @@ body.has-bar { padding-bottom: var(--bar-h); }
 .rev-card figcaption { color: var(--muted); font-size: 14px; }
 .rev-card figcaption a { color: var(--accent); }
 .rev-links { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 8px; }
-.rev-widget { min-height: 120px; margin-bottom: 16px; }
+.rev-widget { margin-bottom: 16px; }
+.rev-cta { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 20px; padding: 18px; margin-bottom: 20px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; }
+.rev-cta p { margin: 0; flex: 1 1 260px; color: var(--muted); }
+.rev-cta .btn { flex: 0 0 auto; }
 
 .rated { margin-top: 16px; font-size: 15px; }
 .rated a { color: var(--accent); text-underline-offset: 3px; }
@@ -391,3 +395,14 @@ body.has-bar { padding-bottom: var(--bar-h); }
 .credit-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 14px; }
 .credit-list .muted { font-size: 12.5px; opacity: .75; }
 .policy-page h2 { margin-top: 26px; }
+
+/* Form errors: plain-language message under the field, field outlined in red */
+.field-err { margin: 6px 0 0; color: var(--danger); font-size: 14px; font-weight: 600; line-height: 1.35; }
+.field input[aria-invalid="true"], .field select[aria-invalid="true"], .field textarea[aria-invalid="true"] { border-color: var(--danger); }
+.field.has-err .drop, .field.has-err .choice { border-color: var(--danger); }
+.field.has-err .drop { border-style: solid; }
+input[type=date] { color-scheme: dark; }
+.notice { margin: 12px 0 0; padding: 12px 14px; border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: var(--radius-sm); background: var(--bg-2); color: var(--muted); font-size: 14px; line-height: 1.5; }
+.notice strong { color: var(--text); }
+.img-note + .img-note { margin-top: 4px; }
+.btn[disabled] { opacity: .6; cursor: progress; }

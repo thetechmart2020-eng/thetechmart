@@ -2,10 +2,11 @@
 
 The slideshow comes from the Elfsight widget (id in "elfsightId"). It pulls Facebook reviews itself. The manual list below is optional, for things the widget cannot show, such as WhatsApp screenshots.
 
-Edit data/reviews.json. The Reviews section appears on the homepage once the list has at least one entry, and stays hidden while it is empty.
+Edit data/reviews.json. The Reviews section always shows a "Read our reviews" button to the Facebook reviews page, plus the Elfsight widget and any manual reviews you add below.
 
 Top of the file:
   "facebookUrl": "https://www.facebook.com/your-page"   (shows a button and a footer link)
+  "facebookReviewsUrl": "https://www.facebook.com/your-page/reviews"   (optional: the exact reviews page for the button; empty uses facebookUrl + /reviews)
   "googleUrl": "https://g.page/r/your-review-link"      (add once verified)
 
 Each review (copy the wording exactly as the customer wrote it):

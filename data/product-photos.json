@@ -99,9 +99,17 @@
  },
  "apple-iphone-12-64gb": {
   "kind": "commons",
-  "w": 2000,
-  "h": 2000,
-  "key": "apple-iphone-12-64gb"
+  "w": 1280,
+  "h": 1707,
+  "key": "apple-iphone-12-64gb",
+  "credit": {
+   "title": "IPhone 12 Green 128g.jpg",
+   "author": "茅野ふたば",
+   "licence": "CC BY-SA 4.0",
+   "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:IPhone_12_Green_128g.jpg",
+   "note": ""
+  }
  },
  "apple-iphone-12-pro-128gb": {
   "kind": "commons",

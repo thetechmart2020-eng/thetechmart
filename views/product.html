@@ -54,12 +54,12 @@
       <h3 id="offer-h">Make an offer</h3>
       <p class="sub" id="offer-sub"></p>
       <form id="offer-form" novalidate>
-        <div class="field"><label for="o-amount">Your offer (R)</label><input id="o-amount" name="amount" type="number" inputmode="numeric" min="1" required></div>
+        <div class="field"><label for="o-amount">Your offer (R)</label><input id="o-amount" name="amount" type="number" inputmode="numeric" min="1" step="1" required></div>
         <div class="row2">
-          <div class="field"><label for="o-name">Your name</label><input id="o-name" name="name" autocomplete="name" required></div>
-          <div class="field"><label for="o-phone">Phone (WhatsApp)</label><input id="o-phone" name="phone" type="tel" autocomplete="tel" placeholder="082 123 4567" required></div>
+          <div class="field"><label for="o-name">Your name</label><input id="o-name" name="name" autocomplete="name" maxlength="80" required></div>
+          <div class="field"><label for="o-phone">Phone (WhatsApp)</label><input id="o-phone" name="phone" type="tel" autocomplete="tel" placeholder="082 123 4567" maxlength="20" required></div>
         </div>
-        <div class="field"><label for="o-msg">Note (optional)</label><textarea id="o-msg" name="message"></textarea></div>
+        <div class="field"><label for="o-msg">Note (optional)</label><textarea id="o-msg" name="message" maxlength="500"></textarea></div>
         <button type="submit" data-channel="whatsapp" class="btn btn-primary btn-block">Send offer on WhatsApp</button>
         <button type="submit" data-channel="email" class="btn btn-ghost btn-block" style="margin-top:10px">Send offer by email</button>
         <p class="err" id="offer-err" role="alert"></p>
@@ -111,9 +111,10 @@
         '<div class="stock ' + st.cls + '">' + st.text + '</div>' +
         '<div class="badges"><span class="badge ' + g.cls + '">' + T.esc(g.text) + '</span><span class="badge badge-warranty">' + T.esc(T.warrantyBadge(p)) + '</span><span class="badge">' + T.esc(p.condition) + '</span></div>' +
         '<ul class="note-list">' +
-          line('truck', 'Delivery R100 flat. The Courier Guy, about 2 days.') +
+          line('truck', 'Courier R100 flat, nationwide. The Courier Guy, about 2 days.') +
           line('shield', p.deal ? '21-day replacement warranty (negotiated device)' : '3-month repair or replacement warranty') +
           line('tag', 'Not quite the right price? Make an offer.') +
+          line('check', 'Prefer to see it first? <a class="link-arrow" href="/meetup?id=' + encodeURIComponent(p.id) + '">Book a meetup</a> (2 days\' notice).') +
         '</ul>' +
         '<div class="pd-actions">' + (sold
           ? '<a class="btn btn-primary" data-wa data-custom data-product="' + p.id + '" href="' + wa + '" target="_blank" rel="noopener">WhatsApp to ask about restock</a>'
@@ -164,10 +165,21 @@
   $('offer-tick').innerHTML = T.I.tick;
   $('offer-form').addEventListener('submit', async function (e) {
     e.preventDefault();
-    var f = e.target, err = $('offer-err'); err.classList.remove('show');
-    var body = { productId: product.id, amount: f.amount.value, name: f.name.value.trim(), phone: f.phone.value.trim(), message: f.message.value.trim() };
-    if (!body.amount || !body.name || !body.phone) { err.textContent = 'Please add your offer, name and phone number.'; err.classList.add('show'); return; }
-    var btns = f.querySelectorAll('button[type=submit]'); btns.forEach(function (b) { b.disabled = true; });
+    var f = e.target, err = $('offer-err'), fv = T.fv; err.classList.remove('show');
+    // An offer must be more than R0, not above the listed price, and at least half of it (lower offers are unrealistic).
+    var rules = [
+      { name: 'amount', check: function (v) {
+        var n = Number(v), price = Number(product.price), min = Math.ceil(price * 0.5);
+        if (!v || !isFinite(n) || n < 1) return 'Please enter your offer in rand, more than R0.';
+        if (n > price) return 'That is above the listed price of ' + T.money(price) + '. Use Buy now, or lower your offer.';
+        if (n < min) return 'Offers under ' + T.money(min) + ' (half the price) are very unlikely to be accepted. Please try a higher amount.';
+        return ''; } },
+      { name: 'name', check: function (v) { return fv.clean(v, 80).length < 2 ? fv.MSG.name : ''; } },
+      { name: 'phone', check: function (v) { return !fv.phone(v) ? fv.MSG.phone : ''; } }
+    ];
+    if (!fv.run(f, rules)) { err.textContent = 'Please fix the highlighted fields.'; err.classList.add('show'); return; }
+    var body = { productId: product.id, amount: Math.round(Number(f.amount.value)), name: fv.clean(f.name.value, 80), phone: f.phone.value.trim(), message: fv.clean(f.message.value, 500) };
+    var unlock = fv.lock(f);
     try {
       var r = await T.api('/api/offers', { method: 'POST', body: body });
       var url = channel === 'email' ? r.mailtoUrl : r.whatsappUrl;
@@ -177,9 +189,15 @@
       // Navigate directly (popup blockers stop window.open after an async call); the button above is the fallback.
       setTimeout(function () { location.href = url; }, 600);
     } catch (ex) {
-      err.textContent = ex.message; err.classList.add('show'); btns.forEach(function (b) { b.disabled = false; });
+      if (ex.fields && fv.apply(f, ex.fields)) { err.textContent = 'Please fix the highlighted fields.'; }
+      else err.textContent = ex.message;
+      err.classList.add('show'); unlock();
     }
   });
+  T.fv.live($('offer-form'), [
+    { name: 'name', check: function (v) { return T.fv.clean(v, 80).length < 2 ? T.fv.MSG.name : ''; } },
+    { name: 'phone', check: function (v) { return !T.fv.phone(v) ? T.fv.MSG.phone : ''; } }
+  ]);
 
   // ---- start: embedded data first, API only as a fallback ----
   var b = T.boot;

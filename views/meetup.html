@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{TITLE}}</title>
+<meta name="description" content="{{DESCRIPTION}}">
+<link rel="canonical" href="{{CANONICAL}}">
+<meta property="og:title" content="{{TITLE}}">
+<meta property="og:description" content="{{DESCRIPTION}}">
+<meta property="og:image" content="{{OGIMAGE}}">
+<meta name="theme-color" content="#0a0b0c">
+<!--ROBOTS-->
+<link rel="icon" type="image/png" href="/img/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap">
+<link rel="stylesheet" href="/css/site.css">
+<!--BOOT-->
+</head>
+<body class="has-bar">
+<!--HEADER-->
+<main id="main" class="wrap">
+  <div class="form-page">
+    <p class="eyebrow">Meetups</p>
+    <h1>Book a meetup</h1>
+    <p class="lede">Pick the device, a date and a time slot, and tell us where you would like to meet. We confirm on WhatsApp.</p>
+
+    <div id="form-wrap">
+      <form class="box" id="meetup-form" novalidate>
+        <div class="field"><label for="m-dev">Device</label>
+          <select id="m-dev" name="productId" required><option value="">Choose a device</option></select></div>
+        <div class="row2">
+          <div class="field"><label for="m-date">Preferred date</label><input id="m-date" name="meetupDate" type="date" required></div>
+          <div class="field"><label for="m-slot">Time slot</label>
+            <select id="m-slot" name="meetupSlot" required><option value="">Choose a slot</option></select></div>
+        </div>
+        <p class="notice" style="margin:-4px 0 16px"><strong>Meetups need 2 days' notice</strong> so we can get the device to our sales agent. Today and tomorrow cannot be booked.</p>
+        <div class="field"><label for="m-area">Meetup area or suburb</label><input id="m-area" name="meetupArea" maxlength="80" placeholder="e.g. Sandton City" required></div>
+        <div class="row2">
+          <div class="field"><label for="m-name">Your name</label><input id="m-name" name="name" autocomplete="name" maxlength="80" required></div>
+          <div class="field"><label for="m-phone">Phone (WhatsApp)</label><input id="m-phone" name="phone" type="tel" autocomplete="tel" placeholder="082 123 4567" maxlength="20" required></div>
+        </div>
+        <div class="field"><label for="m-email">Email (optional)</label><input id="m-email" name="email" type="email" autocomplete="email" maxlength="254"></div>
+        <div class="field"><label for="m-notes">Anything else? (optional)</label><textarea id="m-notes" name="notes" maxlength="500"></textarea></div>
+        <button class="btn btn-primary btn-block" type="submit" data-ch="whatsapp">Send request on WhatsApp</button>
+        <button class="btn btn-ghost btn-block" type="submit" data-ch="email" style="margin-top:10px">Send request by email</button>
+        <p class="err" id="m-err" role="alert"></p>
+      </form>
+
+      <div class="box" style="margin-top:18px">
+        <h2>How meetups work</h2>
+        <ol style="margin:0;padding-left:20px;color:var(--muted);display:grid;gap:6px">
+          <li>Send your request. It opens WhatsApp (or email) with the details filled in. Press send.</li>
+          <li>We release the device from the warehouse and send it to our sales agent. This is why we need 2 days' notice.</li>
+          <li>We confirm the time and place with you on WhatsApp.</li>
+          <li>Pay by Yoco or EFT before the meetup, or pay cash at the meetup.</li>
+        </ol>
+        <p style="margin-top:14px">Rather chat first? <a class="link-arrow" data-wa data-custom href="https://wa.me/27716623565?text=Hi%20TheTechMart%2C%20I%20would%20like%20to%20book%20a%20meetup." target="_blank" rel="noopener">WhatsApp 071 662 3565</a></p>
+      </div>
+    </div>
+
+    <div class="box ok-box" id="done" hidden>
+      <div class="tick" id="tick"></div><h1>Request saved</h1>
+      <p>Thank you. Your meetup reference is <strong id="m-ref"></strong>. Press send in WhatsApp (or your email app) so we receive it. We confirm the time and place with you.</p>
+      <a class="btn btn-primary btn-block" id="open-ch" href="#">Open WhatsApp</a>
+      <p style="margin-top:14px"><a class="link-arrow" href="/">Back to the shop</a></p>
+    </div>
+  </div>
+</main>
+<!--FOOTER-->
+<div class="sticky-bar single"><a class="btn btn-wa" data-wa data-custom href="https://wa.me/27716623565?text=Hi%20TheTechMart%2C%20I%20would%20like%20to%20book%20a%20meetup." target="_blank" rel="noopener">WhatsApp us</a></div>
+<script src="/js/site.js"></script>
+<script>
+(function () {
+  var T = window.TTM, fv = T.fv, $ = function (id) { return document.getElementById(id); };
+  $('tick').innerHTML = T.I.tick;
+  T.track('page_view');
+  var form = $('meetup-form'), channel = 'whatsapp', b = T.boot || {};
+
+  // Devices come from live stock. Out-of-stock ones can still be asked about (we confirm availability).
+  function fill(list) {
+    var want = b.id || new URLSearchParams(location.search).get('id') || '';
+    $('m-dev').innerHTML += list.map(function (p) {
+      var label = p.brand + ' ' + p.model + (p.storage ? ' ' + p.storage : '') + ' (' + T.money(p.price) + ')' + (T.isSold(p) ? ' - out of stock, we will confirm' : '');
+      return '<option value="' + T.esc(p.id) + '"' + (p.id === want ? ' selected' : '') + '>' + T.esc(label) + '</option>';
+    }).join('');
+  }
+  if (b.products) fill(b.products); else T.api('/api/products').then(fill).catch(function () {});
+
+  $('m-slot').innerHTML += Object.keys(fv.SLOTS).map(function (k) { return '<option value="' + k + '">' + fv.SLOTS[k] + '</option>'; }).join('');
+  var date = $('m-date'); date.min = fv.minMeetup(); date.max = fv.maxMeetup();
+  date.addEventListener('change', function () {
+    var sun = /^\d{4}-\d{2}-\d{2}$/.test(date.value) && fv.isSunday(date.value), late = form.meetupSlot.querySelector('option[value=late]');
+    late.disabled = sun; if (sun && form.meetupSlot.value === 'late') form.meetupSlot.value = '';
+  });
+
+  form.querySelectorAll('button[type=submit]').forEach(function (x) { x.addEventListener('click', function () { channel = x.dataset.ch; }); });
+  var rules = [
+    { name: 'productId', check: function (v) { return !v ? 'Please choose the device you would like to see.' : ''; } },
+    { name: 'meetupDate', check: function (v) { return fv.meetupDate(v); } },
+    { name: 'meetupSlot', check: function (v, d) { return !fv.SLOTS[v] ? 'Please choose a time slot.' : (v === 'late' && /^\d{4}/.test(d.meetupDate) && fv.isSunday(d.meetupDate) ? 'On Sundays we trade until 15:00. Please pick the morning or afternoon slot.' : ''); } },
+    { name: 'meetupArea', check: function (v) { return fv.clean(v, 80).length < 3 ? 'Please tell us the area or suburb where you would like to meet.' : ''; } },
+    { name: 'name', check: function (v) { return fv.clean(v, 80).length < 2 ? fv.MSG.name : ''; } },
+    { name: 'phone', check: function (v) { return !fv.phone(v) ? fv.MSG.phone : ''; } },
+    { name: 'email', check: function (v) { return v && !fv.email(v) ? fv.MSG.email : ''; } }
+  ];
+  fv.live(form, rules);
+  form.addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var err = $('m-err'); err.classList.remove('show');
+    if (!fv.run(form, rules)) { err.textContent = 'Please fix the highlighted fields.'; err.classList.add('show'); return; }
+    var body = {
+      productId: form.productId.value, meetupDate: form.meetupDate.value, meetupSlot: form.meetupSlot.value, meetupArea: fv.clean(form.meetupArea.value, 80),
+      name: fv.clean(form.name.value, 80), phone: form.phone.value.trim(), email: form.email.value.trim(), notes: fv.clean(form.notes.value, 500)
+    };
+    var unlock = fv.lock(form);
+    try {
+      var r = await T.api('/api/meetups', { method: 'POST', body: body });
+      var url = channel === 'email' ? r.mailtoUrl : r.whatsappUrl;
+      $('form-wrap').hidden = true; $('done').hidden = false; $('m-ref').textContent = r.ref;
+      var l = $('open-ch'); l.href = url; l.textContent = channel === 'email' ? 'Open email' : 'Open WhatsApp';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      setTimeout(function () { location.href = url; }, 700);
+    } catch (ex) {
+      var shown = ex.fields && fv.apply(form, ex.fields);
+      err.textContent = shown ? 'Please fix the highlighted fields.' : ex.message; err.classList.add('show'); unlock();
+    }
+  });
+})();
+</script>
+</body>
+</html>

@@ -12,6 +12,7 @@ const { setAdminCookie, clearAdminCookie, isAdminRequest } = require('./lib/auth
 const payments = require('./lib/payments');
 const { generateQuotePdf, generateInvoicePdf, generatePriceListPdf } = require('./lib/documents');
 const deals = require('./lib/deals');
+const V = require('./lib/validate');
 
 // Flat Courier Guy delivery fee in rand. Collection is R0. This is the ONE place the fee is set:
 // checkout, the saved order, the WhatsApp/email message, the Yoco amount and the site text all use it.
@@ -247,20 +248,40 @@ app.post('/api/track', asyncRoute(async (req, res) => {
   res.json({ ok: true });
 }));
 
+// Sends back plain-language errors, one per field, so the browser can show them next to the input.
+function fieldErrors(res, fields) {
+  return res.status(400).json({ error: Object.values(fields)[0], fields });
+}
+const MSG_NAME = 'Please enter your name.';
+const MSG_PHONE = 'Please enter a valid South African number, like 082 123 4567 or +27 82 123 4567.';
+const MSG_EMAIL = 'Please enter a valid email address, like name@example.com.';
+const CONDITIONS = ['Like new', 'Good', 'Fair', 'Damaged / for parts'];
+
 app.post('/api/offers', asyncRoute(async (req, res) => {
-  const { productId, amount, name, phone, email, message } = req.body;
-  const product = await db.getProduct(productId);
+  const product = await db.getProduct(req.body.productId);
   if (!product) return res.status(404).json({ error: 'Product not found' });
-  if (!amount || !name || !phone) return res.status(400).json({ error: 'Missing required fields' });
+  const fields = {};
+  const name = V.oneLine(req.body.name, 80);
+  if (name.length < 2) fields.name = MSG_NAME;
+  const ph = V.phone(req.body.phone); if (!ph.ok) fields.phone = MSG_PHONE;
+  let emailVal = '';
+  if (String(req.body.email || '').trim()) { const em = V.email(req.body.email); if (em.ok) emailVal = em.value; else fields.email = MSG_EMAIL; }
+  const amount = Math.round(Number(req.body.amount));
+  const price = Number(product.price);
+  if (!Number.isFinite(amount) || amount < 1) fields.amount = 'Please enter your offer in rand, more than R0.';
+  else if (amount > price) fields.amount = `That is above the listed price of R${price}. Use Buy now, or lower your offer.`;
+  else if (amount < Math.ceil(price * 0.5)) fields.amount = `Offers under R${Math.ceil(price * 0.5)} (half the price) are very unlikely to be accepted. Please try a higher amount.`;
+  if (Object.keys(fields).length) return fieldErrors(res, fields);
+  const message = V.clean(req.body.message, 500);
 
   const offer = await db.addOffer({
-    productId, productName: `${product.brand} ${product.model}`, listPrice: product.price,
-    amount: Number(amount), name, phone, email: email || '', message: message || ''
+    productId: product.id, productName: `${product.brand} ${product.model}`, listPrice: product.price,
+    amount, name, phone: ph.value, email: emailVal, message
   });
-  await db.logEvent({ type: 'offer_submitted', productId }).catch(() => {});
+  await db.logEvent({ type: 'offer_submitted', productId: product.id }).catch(() => {});
 
   const cfg = await db.getConfig();
-  const waMessage = `Hi TheTechMart! I'd like to make an offer.\n\nDevice: ${offer.productName}\nList price: R${offer.listPrice}\nMy offer: R${offer.amount}\nName: ${name}\nContact: ${phone}\n${message ? 'Note: ' + message : ''}\n\n(Offer ref: ${offer.id.slice(0, 8)})`;
+  const waMessage = `Hi TheTechMart! I'd like to make an offer.\n\nDevice: ${offer.productName}\nList price: R${offer.listPrice}\nMy offer: R${offer.amount}\nName: ${name}\nContact: ${ph.value}\n${message ? 'Note: ' + message : ''}\n\n(Offer ref: ${offer.id.slice(0, 8)})`;
 
   res.json({
     offer,
@@ -269,23 +290,52 @@ app.post('/api/offers', asyncRoute(async (req, res) => {
   });
 }));
 
-app.post('/api/tradeins', tradeinUpload.array('photos', 6), asyncRoute(async (req, res) => {
-  const { brand, model, storage, condition, askingPrice, name, phone, notes, type } = req.body;
-  if (!brand || !model || !name || !phone) return res.status(400).json({ error: 'Missing required fields' });
+// Runs the photo upload and turns upload problems into plain JSON errors instead of a server error page.
+function tradeinPhotos(req, res, next) {
+  tradeinUpload.array('photos', 6)(req, res, (err) => {
+    if (!err) return next();
+    const msg = err.code === 'LIMIT_FILE_SIZE' ? 'One of your photos is too big. Each photo must be under 8 MB.'
+      : (err.code === 'LIMIT_UNEXPECTED_FILE' || err.code === 'LIMIT_FILE_COUNT') ? 'You can add up to 6 photos.'
+      : 'We could not read your photos. Please try again.';
+    res.status(400).json({ error: msg, fields: { photos: msg } });
+  });
+}
+
+app.post('/api/tradeins', tradeinPhotos, asyncRoute(async (req, res) => {
+  const fields = {};
+  const brand = V.oneLine(req.body.brand, 60), model = V.oneLine(req.body.model, 80), storage = V.oneLine(req.body.storage, 30);
+  if (brand.length < 2) fields.brand = 'Please enter the brand, for example Apple.';
+  if (model.length < 1) fields.model = 'Please enter the model, for example iPhone 13.';
+  const condition = CONDITIONS.includes(req.body.condition) ? req.body.condition : '';
+  if (!condition) fields.condition = 'Please choose the condition of your device.';
+  const name = V.oneLine(req.body.name, 80); if (name.length < 2) fields.name = MSG_NAME;
+  const ph = V.phone(req.body.phone); if (!ph.ok) fields.phone = MSG_PHONE;
+  let askingPrice = null;
+  if (String(req.body.askingPrice || '').trim()) {
+    askingPrice = Math.round(Number(req.body.askingPrice));
+    if (!Number.isFinite(askingPrice) || askingPrice < 1 || askingPrice > 1000000) fields.askingPrice = 'Please enter a price in rand between R1 and R1 000 000, or leave it empty.';
+  }
+  const files = req.files || [];
+  if (files.length < 1) fields.photos = 'Please add at least 1 photo (up to 6).';
+  else if (files.length > 6) fields.photos = 'You can add up to 6 photos.';
+  else if (files.some((f) => V.imageKind(f.buffer) === null)) fields.photos = 'Photos must be JPG, PNG or WebP pictures.';
+  if (Object.keys(fields).length) return fieldErrors(res, fields);
+  const notes = V.clean(req.body.notes, 800);
+  const type = req.body.type === 'trade' ? 'trade' : 'sell';
 
   const photos = [];
-  for (const file of req.files || []) {
+  for (const file of files) {
     photos.push(await uploadBuffer('tradein-photos', file));
   }
 
   const submission = await db.addTradein({
-    type: type === 'trade' ? 'trade' : 'sell', brand, model, storage: storage || '', condition: condition || '',
-    askingPrice: askingPrice ? Number(askingPrice) : null, name, phone, notes: notes || '', photos
+    type, brand, model, storage, condition,
+    askingPrice, name, phone: ph.value, notes, photos
   });
   await db.logEvent({ type: 'tradein_submitted' }).catch(() => {});
 
   const cfg = await db.getConfig();
-  const waMessage = `Hi TheTechMart! I'd like to ${submission.type === 'trade' ? 'trade in' : 'sell'} a device.\n\nDevice: ${brand} ${model}\nStorage: ${storage || 'N/A'}\nCondition: ${condition || 'N/A'}\n${askingPrice ? 'Asking price: R' + askingPrice : ''}\nName: ${name}\nContact: ${phone}\n${notes ? 'Notes: ' + notes : ''}\n\n(Ref: ${submission.id.slice(0, 8)})`;
+  const waMessage = `Hi TheTechMart! I'd like to ${submission.type === 'trade' ? 'trade in' : 'sell'} a device.\n\nDevice: ${brand} ${model}\nStorage: ${storage || 'N/A'}\nCondition: ${condition || 'N/A'}\n${askingPrice ? 'Asking price: R' + askingPrice : ''}\nName: ${name}\nContact: ${ph.value}\n${notes ? 'Notes: ' + notes : ''}\n\n(Ref: ${submission.id.slice(0, 8)})`;
 
   res.json({
     submission,
@@ -303,8 +353,7 @@ app.post('/api/tradeins', tradeinUpload.array('photos', 6), asyncRoute(async (re
 // WhatsApp or email to confirm payment/delivery — same conversational flow the
 // business already runs on WhatsApp today.
 app.post('/api/checkout', asyncRoute(async (req, res) => {
-  const { productId, name, email, phone, address, fulfillmentMethod, paymentMethod, paymentPreference, notes } = req.body;
-  if (!name || !phone || !email) return res.status(400).json({ error: 'Name, email and phone are required' });
+  const { productId, fulfillmentMethod, paymentMethod, paymentPreference } = req.body;
 
   const product = await db.getProduct(productId);
   if (!product) return res.status(404).json({ error: 'Product not found' });
@@ -317,30 +366,55 @@ app.post('/api/checkout', asyncRoute(async (req, res) => {
   // never block the purchase outright.
   const isPreOrder = product.stock < 1;
 
-  const method = fulfillmentMethod === 'collection' ? 'collection' : 'delivery';
-  // Cash is only offered with collection.
+  // Three ways to get the device: Courier Guy delivery ('delivery'), collection, or a meetup by appointment.
+  const method = ['collection', 'meetup'].includes(fulfillmentMethod) ? fulfillmentMethod : 'delivery';
+  const fields = {};
+  const name = V.oneLine(req.body.name, 80); if (name.length < 2) fields.name = MSG_NAME;
+  const ph = V.phone(req.body.phone); if (!ph.ok) fields.phone = MSG_PHONE;
+  const em = V.email(req.body.email); if (!em.ok) fields.email = MSG_EMAIL;
+  const notes = V.clean(req.body.notes, 500);
+
+  // Cash is never available for courier delivery: only on collection, at a meetup or at pickup.
   if (paymentPreference === 'cash' && method === 'delivery') {
-    return res.status(400).json({ error: 'Cash is only available with collection. Please choose EFT or card for delivery.' });
-  }
-  // One server-side total: device price + flat delivery (R0 for collection).
-  const deliveryFee = method === 'delivery' ? DELIVERY_FEE : 0;
-  const total = Number(product.price) + deliveryFee;
-  if (method === 'delivery') {
-    if (!address || !address.line1 || !address.city || !address.postalCode) {
-      return res.status(400).json({ error: 'Delivery address (address, city, postal code) is required for Courier Guy delivery' });
-    }
+    fields.pay = 'Cash is only available for collection or a meetup. Please choose Yoco (card) or EFT for courier delivery.';
   }
 
+  let address = {}, meetup = null;
+  if (method === 'delivery') {
+    const a = req.body.address || {};
+    address = {
+      line1: V.oneLine(a.line1, 120), line2: V.oneLine(a.line2, 80), city: V.oneLine(a.city, 80),
+      province: V.PROVINCES.includes(a.province) ? a.province : '', postalCode: String(a.postalCode || '').trim()
+    };
+    if (address.line1.length < 4) fields.line1 = 'Please enter your street address, with the street number.';
+    if (address.line2.length < 2) fields.line2 = 'Please enter your suburb.';
+    if (address.city.length < 2) fields.city = 'Please enter your city or town.';
+    if (!address.province) fields.province = 'Please choose your province.';
+    if (!V.postal(address.postalCode).ok) fields.postalCode = 'Please enter a 4-digit postal code, like 2196.';
+  } else if (method === 'meetup') {
+    const m = req.body.meetup || {};
+    const r = V.meetupFields(m);
+    Object.assign(fields, r.errors);
+    meetup = r.value;
+  }
+  if (Object.keys(fields).length) return fieldErrors(res, fields);
+
+  // One server-side total: device price + flat delivery (R0 for collection and meetups).
+  const deliveryFee = method === 'delivery' ? DELIVERY_FEE : 0;
+  const total = Number(product.price) + deliveryFee;
+  const phone = ph.value, email = em.value;
+
   const cfg = await db.getConfig();
-  const wantsGateway = ['yoco', 'payjustnow', 'happypay'].includes(paymentMethod);
+  const wantsGateway = ['yoco', 'payjustnow', 'happypay'].includes(paymentMethod) && paymentPreference !== 'cash';
 
   const order = await db.addOrder({
     type: 'sale', source: 'checkout', productId: product.id,
     customerName: name, customerPhone: phone, customerEmail: email,
-    deliveryAddress: method === 'delivery' ? address : {}, fulfillmentMethod: method,
-    courier: 'Courier Guy', paymentMethod: wantsGateway ? paymentMethod : 'manual',
+    deliveryAddress: method === 'delivery' ? address : (meetup ? { meetup } : {}), fulfillmentMethod: method,
+    courier: method === 'delivery' ? 'Courier Guy' : (method === 'meetup' ? 'Meetup' : 'Collection'), paymentMethod: wantsGateway ? paymentMethod : 'manual',
     paymentStatus: 'pending', amount: total,
     notes: (isPreOrder ? '[PRE-ORDER — source from supplier before dispatch] ' : '')
+      + (meetup ? `[MEETUP ${meetup.date} ${meetup.slotLabel} at ${meetup.area}] ` : '')
       + (['card', 'eft', 'cash'].includes(paymentPreference) ? `[Payment preference: ${paymentPreference.toUpperCase()}] ` : '')
       + (notes || '')
   });
@@ -352,7 +426,7 @@ app.post('/api/checkout', asyncRoute(async (req, res) => {
 
   const addressLine = method === 'delivery'
     ? `${address.line1}${address.line2 ? ', ' + address.line2 : ''}, ${address.city}, ${address.postalCode}${address.province ? ', ' + address.province : ''}`
-    : 'Collection (arranged on WhatsApp)';
+    : (method === 'meetup' ? `Meetup on ${meetup.date}, ${meetup.slotLabel}, ${meetup.area}` : 'Collection (arranged on WhatsApp)');
 
   if (wantsGateway) {
     try {
@@ -366,15 +440,51 @@ app.post('/api/checkout', asyncRoute(async (req, res) => {
     }
   }
 
-  const prefLabel = { card: 'Card', eft: 'EFT / bank transfer', cash: 'Cash on collection' }[paymentPreference] || '';
-  const summary = `Hi TheTechMart! I'd like to buy this device.\n\nDevice: ${product.brand} ${product.model}${product.storage ? ' · ' + product.storage : ''}\nDevice price: R${product.price}\nDelivery: ${method === 'delivery' ? 'R' + deliveryFee + ' (flat, The Courier Guy, about 2 days)' : 'R0 (collection)'}\nTotal: R${total}\nName: ${name}\nEmail: ${email}\nContact: ${phone}\nFulfillment: ${method === 'delivery' ? 'Courier Guy delivery to ' + addressLine : 'Collection (arranged on WhatsApp)'}\n${prefLabel ? 'Payment: ' + prefLabel + '\n' : ''}${isPreOrder ? 'Pre-order: yes\n' : ''}${notes ? 'Notes: ' + notes : ''}\n\n(Order ref: ${order.id.slice(0, 8)})`;
+  const prefLabel = { card: 'Card (Yoco)', eft: 'EFT / bank transfer', cash: 'Cash on collection (meetup or pickup only)' }[paymentPreference] || '';
+  const summary = `Hi TheTechMart! I'd like to buy this device.\n\nDevice: ${product.brand} ${product.model}${product.storage ? ' · ' + product.storage : ''}\nDevice price: R${product.price}\nDelivery: ${method === 'delivery' ? 'R' + deliveryFee + ' (flat, The Courier Guy, about 2 days)' : (method === 'meetup' ? 'R0 (meetup)' : 'R0 (collection)')}\nTotal: R${total}\nName: ${name}\nEmail: ${email}\nContact: ${phone}\nFulfillment: ${method === 'delivery' ? 'Courier Guy delivery to ' + addressLine : addressLine}\n${prefLabel ? 'Payment: ' + prefLabel + '\n' : ''}${isPreOrder ? 'Pre-order: yes\n' : ''}${notes ? 'Notes: ' + notes : ''}\n\n(Order ref: ${order.id.slice(0, 8)})`;
 
   res.json({
     order,
     preOrder: isPreOrder,
-    deliveryFee, total,
+    deliveryFee, total, fulfillmentMethod: method,
     whatsappUrl: waLink(cfg.whatsappNumber, summary),
     mailtoUrl: mailtoLink(cfg.contactEmail, `Order: ${product.brand} ${product.model} (ref ${order.id.slice(0, 8)})`, summary)
+  });
+}));
+
+// ================= MEETUP REQUESTS =================
+// A meetup is booked at least 2 days ahead so the device can be released from the warehouse and
+// sent to our sales agent. The request is saved as an order lead (source 'meetup'), then handed to
+// WhatsApp (or email) with the details filled in.
+app.post('/api/meetups', asyncRoute(async (req, res) => {
+  const product = await db.getProduct(req.body.productId);
+  const fields = {};
+  if (!product || !product.active) fields.productId = 'Please choose the device you would like to see.';
+  const name = V.oneLine(req.body.name, 80); if (name.length < 2) fields.name = MSG_NAME;
+  const ph = V.phone(req.body.phone); if (!ph.ok) fields.phone = MSG_PHONE;
+  let emailVal = '';
+  if (String(req.body.email || '').trim()) { const em = V.email(req.body.email); if (em.ok) emailVal = em.value; else fields.email = MSG_EMAIL; }
+  const r = V.meetupFields({ area: req.body.meetupArea, date: req.body.meetupDate, slot: req.body.meetupSlot });
+  Object.assign(fields, r.errors);
+  if (Object.keys(fields).length) return fieldErrors(res, fields);
+  const meetup = r.value, notes = V.clean(req.body.notes, 500);
+
+  const order = await db.addOrder({
+    type: 'sale', source: 'meetup', productId: product.id,
+    customerName: name, customerPhone: ph.value, customerEmail: emailVal,
+    deliveryAddress: { meetup }, fulfillmentMethod: 'meetup', courier: 'Meetup',
+    paymentMethod: 'manual', paymentStatus: 'pending', amount: Number(product.price),
+    notes: `[MEETUP REQUEST ${meetup.date} ${meetup.slotLabel} at ${meetup.area}] ${notes}`.trim()
+  });
+  await db.logEvent({ type: 'offer_submitted', productId: product.id }).catch(() => {});
+
+  const cfg = await db.getConfig();
+  const dev = `${product.brand} ${product.model}${product.storage ? ' · ' + product.storage : ''}`;
+  const msg = `Hi TheTechMart! I'd like to book a meetup.\n\nDevice: ${dev} (R${product.price})\nPreferred date: ${meetup.date}\nTime slot: ${meetup.slotLabel}\nMeetup area: ${meetup.area}\nName: ${name}\nContact: ${ph.value}\n${notes ? 'Note: ' + notes + '\n' : ''}\n(Meetup ref: ${order.id.slice(0, 8)})`;
+  res.json({
+    order, ref: order.id.slice(0, 8),
+    whatsappUrl: waLink(cfg.whatsappNumber, msg),
+    mailtoUrl: mailtoLink(cfg.contactEmail, `Meetup request: ${dev} (ref ${order.id.slice(0, 8)})`, msg)
   });
 }));
 
@@ -682,7 +792,7 @@ function orderItems(order, product) {
 
 function orderAddressLine(order) {
   const a = order.deliveryAddress || {};
-  if (order.fulfillmentMethod === 'collection' || !a.line1) return null;
+  if (order.fulfillmentMethod !== 'delivery' || !a.line1) return null;
   return [a.line1, a.line2, a.city, a.postalCode, a.province].filter(Boolean).join(', ');
 }
 
@@ -726,7 +836,7 @@ app.post('/api/admin/orders/:id/invoice', requireAdmin, asyncRoute(async (req, r
     customer: { name: order.customerName, phone: order.customerPhone, email: order.customerEmail, address: addressLine },
     items: orderItems(order, product),
     paymentStatus: order.paymentStatus, paymentMethod: order.paymentMethod,
-    fulfillment: order.fulfillmentMethod === 'collection' ? 'Collection' : `${order.courier || 'Courier Guy'} delivery${addressLine ? ' — ' + addressLine : ''}`,
+    fulfillment: order.fulfillmentMethod === 'collection' ? 'Collection' : order.fulfillmentMethod === 'meetup' ? 'Meetup' : `${order.courier || 'Courier Guy'} delivery${addressLine ? ' — ' + addressLine : ''}`,
     note: order.notes || ''
   });
   const url = await uploadBuffer('documents', { buffer: pdf, mimetype: 'application/pdf', originalname: `${number}.pdf` });
@@ -812,7 +922,8 @@ function reviewsHtml() {
   const list = (REVIEWS.reviews || []).filter((r) => REVIEW_SOURCES[r.source] && (r.text || safeImg(r.image)));
   const g = safeUrl(REVIEWS.googleUrl), fb = safeUrl(REVIEWS.facebookUrl);
   const widgetId = /^[0-9a-f-]{36}$/i.test(REVIEWS.elfsightId || '') ? REVIEWS.elfsightId : '';
-  if (!list.length && !widgetId) return '';
+  const fbReviews = safeUrl(REVIEWS.facebookReviewsUrl) || (fb ? fb.replace(/\/+$/, '') + '/reviews' : '');
+  if (!list.length && !widgetId && !fbReviews) return '';
   let manual = '';
   if (list.length) {
     const present = Object.keys(REVIEW_SOURCES).filter((k) => list.some((r) => r.source === k));
@@ -834,9 +945,12 @@ function reviewsHtml() {
   const widget = widgetId
     ? `<div class="rev-widget"><script src="https://elfsightcdn.com/platform.js" async></script><div class="elfsight-app-${widgetId}" data-elfsight-app-lazy></div></div>`
     : '';
-  const links = (fb ? `<a class="btn btn-ghost" href="${fb}" target="_blank" rel="noopener">See all reviews on Facebook</a>` : '') +
-                (g ? `<a class="btn btn-ghost" href="${g}" target="_blank" rel="noopener">See all reviews on Google</a>` : '');
-  return `<section class="section section-alt" id="reviews"><div class="wrap"><div class="section-head"><div><p class="eyebrow">Reviews</p><h2>What customers say</h2><p>Real reviews from our customers.</p></div></div>${widget}${manual}${links ? `<div class="rev-links">${links}</div>` : ''}</div></section>`;
+  const links = g ? `<a class="btn btn-ghost" href="${g}" target="_blank" rel="noopener">See our Google reviews</a>` : '';
+  // The button is always there, so the section never looks empty even if the review widget is slow or blocked.
+  const cta = fbReviews
+    ? `<div class="rev-cta"><p>See what our customers say about their devices, delivery and service on our Facebook page.</p><a class="btn btn-primary" href="${fbReviews}" target="_blank" rel="noopener">Read our reviews</a></div>`
+    : '';
+  return `<section class="section section-alt" id="reviews"><div class="wrap"><div class="section-head"><div><p class="eyebrow">Reviews</p><h2>What customers say</h2><p>Real reviews from real customers.</p></div></div>${cta}${widget}${manual}${links ? `<div class="rev-links">${links}</div>` : ''}</div></section>`;
 }
 function footerSocial() {
   const fb = safeUrl(REVIEWS.facebookUrl);
@@ -853,7 +967,7 @@ function renderView(name, { title, description, canonical, ogImage, ogType = 'we
     // Trading hours / returns / delivery text lives in ONE partial, used by the footer and the /policies page.
     .split('<!--POLICY-->').join(readView('partials/policy.html'));
   const tokens = {
-    TITLE: title || 'TheTechMart | the #1 electronics market',
+    TITLE: title || 'TheTechMart | Quality-checked pre-owned electronics',
     DESCRIPTION: description || 'Quality-checked pre-owned phones and electronics with a 3-month warranty and 2-day Courier Guy delivery.',
     CANONICAL: canonical || base || '',
     OGIMAGE: ogImage || (base ? `${base}/img/logo.png` : '/img/logo.png'),
@@ -869,7 +983,7 @@ function renderView(name, { title, description, canonical, ogImage, ogType = 'we
 app.get('/sitemap.xml', asyncRoute(async (req, res) => {
   const base = siteBase(req);
   const products = await db.listProducts({ activeOnly: true });
-  const staticUrls = ['', '/sell', '/policies', '/photo-credits'];
+  const staticUrls = ['', '/sell', '/meetup', '/policies', '/photo-credits'];
   const urls = [
     ...staticUrls.map((p) => `<url><loc>${base}${p}</loc><changefreq>daily</changefreq></url>`),
     ...products.map((p) => `<url><loc>${base}/product?id=${p.id}</loc><changefreq>weekly</changefreq></url>`)
@@ -903,7 +1017,7 @@ app.get('/', asyncRoute(async (req, res) => {
     jsonld: [
       {
         '@context': 'https://schema.org', '@type': 'ElectronicsStore', name: 'TheTechMart', url: `${base}/`,
-        description: 'the #1 electronics market', image: `${base}/img/logo.png`,
+        description: 'Quality-checked pre-owned electronics. Online, courier nationwide, and meetups by appointment.', image: `${base}/img/logo.png`,
         telephone: '+27716623565', areaServed: 'ZA', sameAs: ['https://instagram.com/the_tech_mart']
       },
       {
@@ -913,7 +1027,7 @@ app.get('/', asyncRoute(async (req, res) => {
           ['What condition are the devices in?', 'Our devices are Grade A-B pre-owned and quality checked.'],
           ['How long does delivery take?', 'The Courier Guy delivery: flat R100, about 2 days.'],
           ['Can I make an offer on a price?', 'Yes. Use "Make an offer" on any device and we reply on WhatsApp.'],
-          ['How do I pay?', 'Pay by EFT, Yoco (card) or cash.'],
+          ['How do I pay?', 'Pay by Yoco (card) or EFT. Cash is accepted on collection at a meetup or pickup only, never for courier delivery.'],
           ['What if there is a problem with my device?', 'WhatsApp us on 071 662 3565 with a photo or video showing the problem. We send a reference number and an estimated resolution. Most issues are resolved within about 7 days. This does not limit your statutory consumer rights.'],
           ['Do you buy or trade in devices?', 'Yes. Send us the details and photos of your device through the Sell / Trade-in form and we reply on WhatsApp.']
         ].map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } }))
@@ -1063,6 +1177,25 @@ app.get('/photo-credits', (req, res) => {
     canonical: `${base}/photo-credits`
   }, base).replace('<!--CREDITS-->', () => photoCreditsHtml()));
 });
+
+app.get('/meetup', asyncRoute(async (req, res) => {
+  const base = siteBase(req);
+  let boot = null;
+  try {
+    const [list, cfg] = await Promise.all([db.listProducts({ activeOnly: true }), db.getConfig()]);
+    boot = {
+      cfg: publicConfig(cfg), id: String(req.query.id || ''),
+      products: list.map((p) => ({ id: p.id, brand: p.brand, model: p.model, storage: p.storage, color: p.color, price: p.price, stock: p.stock, sold: p.sold }))
+        .sort((a, b) => (`${a.brand} ${a.model}`).localeCompare(`${b.brand} ${b.model}`))
+    };
+  } catch (err) { console.error('[meetup] data unavailable:', err.message); }
+  if (boot) edgeCache(res, 30, 600);
+  res.send(renderView('meetup.html', {
+    title: 'Book a meetup | TheTechMart',
+    description: "Book a meetup to collect your device from our sales agent. Meetups need 2 days' notice.",
+    canonical: `${base}/meetup`, boot
+  }, base));
+}));
 
 app.get('/sell', asyncRoute(async (req, res) => {
   const base = siteBase(req);

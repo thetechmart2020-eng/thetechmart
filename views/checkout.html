@@ -43,47 +43,55 @@
 (function () {
   var T = window.TTM, $ = function (id) { return document.getElementById(id); };
   var product = null, providers = [];
-  var PROVINCES = ['Eastern Cape', 'Free State', 'Gauteng', 'KwaZulu-Natal', 'Limpopo', 'Mpumalanga', 'North West', 'Northern Cape', 'Western Cape'];
 
   function setStep(n) {
     ['p1', 'p2', 'p3'].forEach(function (id, i) { $(id).className = i + 1 < n ? 'done' : (i + 1 === n ? 'now' : ''); });
   }
 
   function render() {
-    var p = product, sold = T.isSold(p), g = T.gradeBadge(p);
+    var p = product, sold = T.isSold(p), g = T.gradeBadge(p), fv = T.fv;
     var cardLive = providers.some(function (x) { return x.key === 'yoco' && x.live; });
     var FEE = T.deliveryFee;   // flat Courier Guy fee; the server recalculates and saves the real total
     $('co-root').innerHTML =
       '<form class="co" id="co-form" novalidate>' +
         '<div style="display:grid;gap:18px">' +
-          '<section class="box"><h2>Delivery</h2>' +
+          '<section class="box"><h2>How would you like to get it?</h2>' +
             '<div class="choice" id="ful">' +
-              '<label><input type="radio" name="fulfillmentMethod" value="delivery" checked><span>Courier Guy delivery: ' + T.money(FEE) + ' flat<small>The Courier Guy, about 2 days, to your South African address</small></span></label>' +
+              '<label><input type="radio" name="fulfillmentMethod" value="delivery" checked><span>Courier: ' + T.money(FEE) + ' flat, nationwide<small>The Courier Guy, about 2 days, to your South African address</small></span></label>' +
               '<label><input type="radio" name="fulfillmentMethod" value="collection"><span>Collection: R0<small>Arranged with us on WhatsApp</small></span></label>' +
+              '<label><input type="radio" name="fulfillmentMethod" value="meetup"><span>Meetup: R0<small>By appointment, with 2 days\' notice</small></span></label>' +
             '</div>' +
             '<div id="addr" style="margin-top:16px">' +
-              '<div class="field"><label for="c-line1">Street address</label><input id="c-line1" name="line1" autocomplete="address-line1" placeholder="Street and number, unit or complex"></div>' +
-              '<div class="field"><label for="c-line2">Suburb (optional)</label><input id="c-line2" name="line2" autocomplete="address-line2"></div>' +
-              '<div class="row2"><div class="field"><label for="c-city">City</label><input id="c-city" name="city" autocomplete="address-level2"></div>' +
-              '<div class="field"><label for="c-post">Postal code</label><input id="c-post" name="postalCode" inputmode="numeric" autocomplete="postal-code" maxlength="4"></div></div>' +
+              '<div class="field"><label for="c-line1">Street address</label><input id="c-line1" name="line1" autocomplete="address-line1" placeholder="Street and number, unit or complex" maxlength="120"></div>' +
+              '<div class="field"><label for="c-line2">Suburb</label><input id="c-line2" name="line2" autocomplete="address-line2" maxlength="80"></div>' +
+              '<div class="row2"><div class="field"><label for="c-city">City</label><input id="c-city" name="city" autocomplete="address-level2" maxlength="80"></div>' +
+              '<div class="field"><label for="c-post">Postal code</label><input id="c-post" name="postalCode" inputmode="numeric" autocomplete="postal-code" maxlength="4" placeholder="e.g. 2196"></div></div>' +
               '<div class="field"><label for="c-prov">Province</label><select id="c-prov" name="province" autocomplete="address-level1"><option value="">Select province</option>' +
-                PROVINCES.map(function (x) { return '<option>' + x + '</option>'; }).join('') + '</select></div>' +
+                fv.PROVINCES.map(function (x) { return '<option>' + x + '</option>'; }).join('') + '</select></div>' +
+            '</div>' +
+            '<div id="meet" style="margin-top:16px" hidden>' +
+              '<div class="field"><label for="c-marea">Meetup area or suburb</label><input id="c-marea" name="meetupArea" maxlength="80" placeholder="e.g. Sandton City"></div>' +
+              '<div class="row2"><div class="field"><label for="c-mdate">Preferred date</label><input id="c-mdate" name="meetupDate" type="date"></div>' +
+              '<div class="field"><label for="c-mslot">Time slot</label><select id="c-mslot" name="meetupSlot"><option value="">Choose a slot</option>' +
+                Object.keys(fv.SLOTS).map(function (k) { return '<option value="' + k + '">' + fv.SLOTS[k] + '</option>'; }).join('') + '</select></div></div>' +
+              '<p class="notice"><strong>Meetups need 2 days\' notice</strong> so we can get the device to our sales agent. Today and tomorrow cannot be booked.</p>' +
             '</div>' +
           '</section>' +
           '<section class="box"><h2>Your details</h2>' +
-            '<div class="field"><label for="c-name">Full name</label><input id="c-name" name="name" autocomplete="name" required></div>' +
-            '<div class="row2"><div class="field"><label for="c-phone">Phone (WhatsApp)</label><input id="c-phone" name="phone" type="tel" autocomplete="tel" placeholder="082 123 4567" required></div>' +
-            '<div class="field"><label for="c-email">Email</label><input id="c-email" name="email" type="email" autocomplete="email" required></div></div>' +
-            '<div class="field" style="margin-bottom:0"><label for="c-notes">Anything we should know? (optional)</label><textarea id="c-notes" name="notes"></textarea></div>' +
+            '<div class="field"><label for="c-name">Full name</label><input id="c-name" name="name" autocomplete="name" maxlength="80" required></div>' +
+            '<div class="row2"><div class="field"><label for="c-phone">Phone (WhatsApp)</label><input id="c-phone" name="phone" type="tel" autocomplete="tel" placeholder="082 123 4567" maxlength="20" required></div>' +
+            '<div class="field"><label for="c-email">Email</label><input id="c-email" name="email" type="email" autocomplete="email" maxlength="254" required></div></div>' +
+            '<div class="field" style="margin-bottom:0"><label for="c-notes">Anything we should know? (optional)</label><textarea id="c-notes" name="notes" maxlength="500"></textarea></div>' +
           '</section>' +
           '<section class="box"><h2>How would you like to pay?</h2>' +
-            '<div class="choice">' +
+            '<div class="field" style="margin-bottom:0"><div class="choice" id="pay-choice">' +
               (cardLive
                 ? '<label><input type="radio" name="pay" value="card" checked><span>Yoco (card)<small>You are taken to a secure Yoco payment page for the total</small></span></label>'
                 : '<label style="opacity:.55;cursor:not-allowed"><input type="radio" name="pay" value="card" disabled><span>Yoco (card)<small>Not available yet</small></span></label>') +
               '<label><input type="radio" name="pay" value="eft"' + (cardLive ? '' : ' checked') + '><span>EFT<small>We send our bank details on WhatsApp</small></span></label>' +
-              '<label id="cash-opt"><input type="radio" name="pay" value="cash"><span>Cash<small>Only with collection, arranged on WhatsApp</small></span></label>' +
-            '</div>' +
+              '<label id="cash-opt" hidden><input type="radio" name="pay" value="cash"><span>Cash on collection (meetup or pickup only)<small>Not available for courier delivery.</small></span></label>' +
+            '</div></div>' +
+            '<p class="notice" id="pay-note" hidden>For a meetup you can pay by Yoco or EFT before we meet, or pay cash at the meetup.</p>' +
           '</section>' +
         '</div>' +
         '<aside class="box" style="position:sticky;top:84px"><h2>Order summary</h2>' +
@@ -103,16 +111,18 @@
 
     var form = $('co-form'), channel = 'whatsapp';
     form.querySelectorAll('button[type=submit]').forEach(function (b) { b.addEventListener('click', function () { channel = b.dataset.ch; }); });
+    var mdate = $('c-mdate'); mdate.min = fv.minMeetup(); mdate.max = fv.maxMeetup();
 
-    // Collection: no address, delivery R0, cash allowed. Delivery: address, +flat fee, no cash.
+    // Courier: address, flat fee, no cash. Collection and meetup: no fee, cash allowed (never for courier).
     function syncFulfil() {
-      var col = form.fulfillmentMethod.value === 'collection', fee = col ? 0 : FEE;
-      $('addr').hidden = col;
-      $('del-label').textContent = col ? 'Collection' : 'Delivery (The Courier Guy, about 2 days)';
+      var m = form.fulfillmentMethod.value, courier = m === 'delivery', fee = courier ? FEE : 0;
+      $('addr').hidden = !courier; $('meet').hidden = m !== 'meetup';
+      $('del-label').textContent = courier ? 'Delivery (The Courier Guy, about 2 days)' : (m === 'meetup' ? 'Meetup' : 'Collection');
       $('del-amt').textContent = T.money(fee);
       $('total-amt').textContent = T.money(p.price + fee);
-      $('cash-opt').hidden = !col;
-      if (!col && form.pay.value === 'cash') { var f = form.querySelector('input[name=pay]:not([disabled]):not([value=cash])'); if (f) f.checked = true; }
+      $('cash-opt').hidden = courier; $('pay-note').hidden = m !== 'meetup';
+      if (courier && form.pay.value === 'cash') { var f = form.querySelector('input[name=pay]:not([disabled]):not([value=cash])'); if (f) f.checked = true; }
+      fv.clearAll(form);
     }
     // Card (Yoco) goes straight to the Yoco page; EFT/cash hand off to WhatsApp or email.
     function syncPay() {
@@ -120,35 +130,57 @@
       form.querySelector('button[data-ch=whatsapp]').textContent = card ? 'Place order and pay with Yoco' : 'Place order and continue on WhatsApp';
       form.querySelector('button[data-ch=email]').hidden = card;
     }
-    form.addEventListener('change', function () { syncFulfil(); syncPay(); });
-    syncPay();
-    syncFulfil();
+    // Slot list follows the date: on Sundays we trade until 15:00, so no late slot.
+    function syncSlots() {
+      var sun = /^\d{4}-\d{2}-\d{2}$/.test(mdate.value) && fv.isSunday(mdate.value), late = form.meetupSlot.querySelector('option[value=late]');
+      late.disabled = sun; if (sun && form.meetupSlot.value === 'late') form.meetupSlot.value = '';
+    }
+    form.addEventListener('change', function (e) { if (e.target.name === 'fulfillmentMethod') syncFulfil(); if (e.target.name === 'meetupDate') syncSlots(); syncPay(); });
+    syncPay(); syncFulfil();
+
+    // Same rules as the server (lib/validate.js). Each message appears next to its field.
+    var rules = [
+      { name: 'line1', check: function (v, d) { return d.fulfillmentMethod === 'delivery' && fv.clean(v).length < 4 ? 'Please enter your street address, with the street number.' : ''; } },
+      { name: 'line2', check: function (v, d) { return d.fulfillmentMethod === 'delivery' && fv.clean(v).length < 2 ? 'Please enter your suburb.' : ''; } },
+      { name: 'city', check: function (v, d) { return d.fulfillmentMethod === 'delivery' && fv.clean(v).length < 2 ? 'Please enter your city or town.' : ''; } },
+      { name: 'province', check: function (v, d) { return d.fulfillmentMethod === 'delivery' && fv.PROVINCES.indexOf(v) < 0 ? 'Please choose your province.' : ''; } },
+      { name: 'postalCode', check: function (v, d) { return d.fulfillmentMethod === 'delivery' && !fv.postal(v) ? fv.MSG.postal : ''; } },
+      { name: 'meetupArea', check: function (v, d) { return d.fulfillmentMethod === 'meetup' && fv.clean(v, 80).length < 3 ? 'Please tell us the area or suburb where you would like to meet.' : ''; } },
+      { name: 'meetupDate', check: function (v, d) { return d.fulfillmentMethod === 'meetup' ? fv.meetupDate(v) : ''; } },
+      { name: 'meetupSlot', check: function (v, d) { return d.fulfillmentMethod !== 'meetup' ? '' : (!fv.SLOTS[v] ? 'Please choose a time slot.' : (v === 'late' && /^\d{4}/.test(d.meetupDate) && fv.isSunday(d.meetupDate) ? 'On Sundays we trade until 15:00. Please pick the morning or afternoon slot.' : '')); } },
+      { name: 'name', check: function (v) { return fv.clean(v, 80).length < 2 ? fv.MSG.name : ''; } },
+      { name: 'phone', check: function (v) { return !fv.phone(v) ? fv.MSG.phone : ''; } },
+      { name: 'email', check: function (v) { return !fv.email(v) ? fv.MSG.email : ''; } },
+      { el: form.querySelector('#pay-choice'), name: 'pay', check: function (v, d) { return d.fulfillmentMethod === 'delivery' && v === 'cash' ? 'Cash is only available for collection or a meetup. Please choose Yoco (card) or EFT.' : (!v ? 'Please choose how you would like to pay.' : ''); } }
+    ];
+    // Visible order matches the page so "jump to the first error" lands on the top-most one.
+    var order = ['fulfillmentMethod', 'line1', 'line2', 'city', 'postalCode', 'province', 'meetupArea', 'meetupDate', 'meetupSlot', 'name', 'phone', 'email', 'pay'];
+    rules.sort(function (a, b) { return order.indexOf(a.name) - order.indexOf(b.name); });
+    fv.live(form, rules.filter(function (r) { return !r.el; }));
 
     form.addEventListener('submit', async function (e) {
       e.preventDefault();
       var err = $('co-err'); err.classList.remove('show');
+      if (!fv.run(form, rules)) { err.textContent = 'Please fix the highlighted fields.'; err.classList.add('show'); return; }
       var d = {}; new FormData(form).forEach(function (v, k) { d[k] = typeof v === 'string' ? v.trim() : v; });
-      var delivery = d.fulfillmentMethod === 'delivery';
-      var msg = '';
-      if (!d.name) msg = 'Please enter your name.';
-      else if (!d.phone || d.phone.replace(/\D/g, '').length < 9) msg = 'Please enter a valid phone number.';
-      else if (!/^\S+@\S+\.\S+$/.test(d.email || '')) msg = 'Please enter a valid email address.';
-      else if (delivery && (!d.line1 || !d.city || !/^\d{4}$/.test(d.postalCode || ''))) msg = 'Please enter your street address, city and 4-digit postal code.';
-      if (msg) { err.textContent = msg; err.classList.add('show'); err.scrollIntoView({ block: 'center', behavior: 'smooth' }); return; }
+      var m = d.fulfillmentMethod, delivery = m === 'delivery';
 
-      var btns = form.querySelectorAll('button[type=submit]'); btns.forEach(function (b) { b.disabled = true; });
+      var unlock = fv.lock(form);
       var body = {
-        productId: product.id, name: d.name, email: d.email, phone: d.phone, notes: d.notes,
-        fulfillmentMethod: d.fulfillmentMethod, paymentPreference: d.pay,
+        productId: product.id, name: fv.clean(d.name, 80), email: d.email, phone: d.phone, notes: fv.clean(d.notes, 500),
+        fulfillmentMethod: m, paymentPreference: d.pay,
         paymentMethod: d.pay === 'card' && cardLive ? 'yoco' : 'manual',
-        address: delivery ? { line1: d.line1, line2: d.line2, city: d.city, postalCode: d.postalCode, province: d.province } : undefined
+        address: delivery ? { line1: fv.clean(d.line1, 120), line2: fv.clean(d.line2, 80), city: fv.clean(d.city, 80), postalCode: d.postalCode, province: d.province } : undefined,
+        meetup: m === 'meetup' ? { area: fv.clean(d.meetupArea, 80), date: d.meetupDate, slot: d.meetupSlot } : undefined
       };
       try {
         var r = await T.api('/api/checkout', { method: 'POST', body: body });
         if (r.redirectUrl) { location.href = r.redirectUrl; return; }
         done(r, channel);
       } catch (ex) {
-        err.textContent = ex.message; err.classList.add('show'); btns.forEach(function (b) { b.disabled = false; });
+        if (!(ex.fields && fv.apply(form, ex.fields))) { err.textContent = ex.message; err.classList.add('show'); err.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+        else { err.textContent = 'Please fix the highlighted fields.'; err.classList.add('show'); }
+        unlock();
       }
     });
   }
@@ -158,7 +190,7 @@
     var url = channel === 'email' ? r.mailtoUrl : r.whatsappUrl, ref = r.order.id.slice(0, 8);
     $('co-root').innerHTML =
       '<div class="box ok-box"><div class="tick">' + T.I.tick + '</div><h1>Order placed</h1>' +
-      '<p>Thank you. Your order reference is <strong>' + T.esc(ref) + '</strong>. Total: <strong>' + T.money(r.total) + '</strong> (' + (r.deliveryFee ? 'device plus ' + T.money(r.deliveryFee) + ' delivery' : 'collection, no delivery fee') + '). ' + (r.preOrder ? 'This device is a pre-order, so we will confirm availability with you. ' : '') +
+      '<p>Thank you. Your order reference is <strong>' + T.esc(ref) + '</strong>. Total: <strong>' + T.money(r.total) + '</strong> (' + (r.deliveryFee ? 'device plus ' + T.money(r.deliveryFee) + ' delivery' : (r.fulfillmentMethod === 'meetup' ? 'meetup, no delivery fee' : 'collection, no delivery fee')) + '). ' + (r.preOrder ? 'This device is a pre-order, so we will confirm availability with you. ' : '') +
       'Press send in ' + (channel === 'email' ? 'your email app' : 'WhatsApp') + ' so we can confirm payment and delivery.</p>' +
       '<a class="btn btn-primary btn-block" id="open-ch" data-custom ' + (channel === 'email' ? '' : 'data-wa target="_blank" rel="noopener"') + ' href="' + T.esc(url) + '">' + (channel === 'email' ? 'Open email' : 'Open WhatsApp') + '</a>' +
       '<p style="margin-top:14px"><a class="link-arrow" href="/">Back to the shop</a></p></div>';

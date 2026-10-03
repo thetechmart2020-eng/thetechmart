@@ -31,7 +31,7 @@
       <div class="hero-copy">
         <p class="hero-chip" id="hero-chip" hidden><span class="dot" aria-hidden="true"></span><span id="hero-count"></span></p>
         <h1>Quality-checked phones and tech, backed by a warranty.</h1>
-        <p class="lede">Fair prices, delivered to your door in 2 days. Spotted something you like? Make an offer and we will reply on WhatsApp.</p>
+        <p class="lede">Fair prices, courier nationwide in about 2 days, or book a meetup. Spotted something you like? Make an offer and we will reply on WhatsApp.</p>
         <div class="hero-actions">
           <a class="btn btn-primary" href="#shop">Shop devices</a>
           <a class="btn btn-ghost" data-wa href="https://wa.me/27716623565" target="_blank" rel="noopener">WhatsApp us</a>
@@ -86,7 +86,7 @@
   <!-- 4. SHOP BY CATEGORY + SHOP -->
   <section class="section section-alt" id="shop">
     <div class="wrap">
-      <div class="section-head">
+      <div class="section-head" id="cats-head">
         <div>
           <p class="eyebrow">Shop</p>
           <h2>Shop by category</h2>
@@ -116,7 +116,7 @@
       <div class="steps">
         <div class="step"><h3>Browse</h3><p>Pick a Grade A-B checked device. Every card shows its condition and warranty.</p></div>
         <div class="step"><h3>Buy or make an offer</h3><p>Tap Buy now, or make an offer and we reply on WhatsApp.</p></div>
-        <div class="step"><h3>Delivered in 2 days</h3><p>The Courier Guy brings it to your door.</p></div>
+        <div class="step"><h3>Delivered or meet up</h3><p>The Courier Guy brings it to your door in about 2 days, or <a class="link-arrow" href="/meetup">book a meetup</a>.</p></div>
       </div>
     </div>
   </section>
@@ -182,7 +182,8 @@
         <details><summary>Can I make an offer on the price?</summary><p>Yes. Tap Make an offer on any device and we reply on WhatsApp.</p></details>
         <details><summary>Can I sell or trade in my device?</summary><p>Yes. Use the Sell / Trade-in form with your device details and photos, and we reply on WhatsApp.</p></details>
         <details><summary>What if there is a problem with my device?</summary><p>WhatsApp us on 071 662 3565 with a photo or video showing the problem. We'll send a reference number and an estimated resolution. Most issues are resolved within about 7 days. This does not limit your statutory consumer rights. <a class="link-arrow" href="/policies">Returns, warranty, delivery and payment</a></p></details>
-        <details><summary>How can I pay?</summary><p>Pay by EFT, Yoco (card) or cash.</p></details>
+        <details><summary>How can I pay?</summary><p>Pay by Yoco (card) or EFT. Cash on collection (meetup or pickup only), never for courier delivery.</p></details>
+        <details><summary>Can I meet up to collect my device?</summary><p>Yes. <a class="link-arrow" href="/meetup">Book a meetup</a>. Meetups need 2 days' notice so we can get the device to our sales agent. You can pay by Yoco or EFT before the meetup, or pay cash at the meetup.</p></details>
       </div>
     </div>
   </section>
@@ -253,13 +254,17 @@
     var d = dealIds.map(function (id) { return ALL.find(function (p) { return p.id === id; }); }).filter(Boolean);
     if (!d.length) return;
     $('deals').hidden = false;
-    $('deals-grid').innerHTML = d.slice(0, 8).map(function (p) { return T.card(p); }).join('');
+    $('deals-grid').innerHTML = d.slice(0, 8).map(function (p, i) { return T.card(p, { eager: i < 4 }); }).join('');
   }
 
   function renderCats() {
-    $('cats').innerHTML = T.CATS.map(function (c) {
-      var n = ALL.filter(function (p) { return p.category === c.name; }).length;
-      return '<button class="cat" data-cat="' + c.name + '" aria-pressed="false">' + T.I[c.icon] + '<span>' + c.name + '</span><small>' + n + ' in stock</small></button>';
+    // Only categories that really have devices available are shown, with the real count. Empty ones are hidden.
+    var shown = T.CATS.map(function (c) {
+      return { c: c, n: ALL.filter(function (p) { return p.category === c.name && !T.isSold(p); }).length };
+    }).filter(function (x) { return x.n > 0; });
+    $('cats-head').hidden = $('cats').hidden = !shown.length;
+    $('cats').innerHTML = shown.map(function (x) {
+      return '<button class="cat" data-cat="' + x.c.name + '" aria-pressed="false">' + T.I[x.c.icon] + '<span>' + x.c.name + '</span><small>' + x.n + ' available</small></button>';
     }).join('');
     $('cats').addEventListener('click', function (e) {
       var b = e.target.closest('.cat'); if (!b) return;
@@ -291,7 +296,7 @@
     document.querySelectorAll('.cat').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.cat === cat ? 'true' : 'false'); });
     $('shop-title').textContent = cat ? cat : 'All devices';
     $('shop-count').textContent = list.length + (list.length === 1 ? ' device' : ' devices');
-    $('shop-grid').innerHTML = list.length ? list.slice(0, shown).map(function (p) { return T.card(p); }).join('')
+    $('shop-grid').innerHTML = list.length ? list.slice(0, shown).map(function (p, i) { return T.card(p, { eager: i < 4 && !dealIds.length }); }).join('')
       : '<div class="empty" style="grid-column:1/-1">Nothing matches that search. <a class="link-arrow" data-wa href="https://wa.me/27716623565">Ask us on WhatsApp</a> and we will source it.</div>';
     $('more').hidden = list.length <= shown;
   }

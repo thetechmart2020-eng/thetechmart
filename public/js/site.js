@@ -21,6 +21,84 @@
     return 'https://wa.me/' + (cfg.whatsapp || WA_DEFAULT) + '?text=' + encodeURIComponent(msg);
   }
 
+
+  // ---- form validation: same rules as lib/validate.js on the server (the server checks again) ----
+  var PROVINCES = ['Eastern Cape', 'Free State', 'Gauteng', 'KwaZulu-Natal', 'Limpopo', 'Mpumalanga', 'North West', 'Northern Cape', 'Western Cape'];
+  var SLOTS = { morning: 'Morning (09:00 to 12:00)', afternoon: 'Afternoon (12:00 to 15:00)', late: 'Late afternoon (15:00 to 17:00)' };
+  var MSG = {
+    name: 'Please enter your name.',
+    phone: 'Please enter a valid South African number, like 082 123 4567 or +27 82 123 4567.',
+    email: 'Please enter a valid email address, like name@example.com.',
+    postal: 'Please enter a 4-digit postal code, like 2196.'
+  };
+  var fv = {
+    PROVINCES: PROVINCES, SLOTS: SLOTS, MSG: MSG,
+    // Text from people: no control characters or angle brackets, single spaces.
+    clean: function (v, max) { return String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max || 200); },
+    phone: function (v) { var d = String(v || '').replace(/[\s\-().]/g, ''); return /^0\d{9}$/.test(d) || /^\+27\d{9}$/.test(d); },
+    email: function (v) { return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(v || '').trim()) && String(v).length <= 254; },
+    postal: function (v) { return /^\d{4}$/.test(String(v || '').trim()); },
+    // Today in South African time as YYYY-MM-DD, and a date n days later.
+    today: function () { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Johannesburg', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()); },
+    addDays: function (iso, n) { var d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); },
+    minMeetup: function () { return fv.addDays(fv.today(), 2); },      // meetups need 2 days' notice
+    maxMeetup: function () { return fv.addDays(fv.today(), 60); },
+    isSunday: function (iso) { return new Date(iso + 'T00:00:00Z').getUTCDay() === 0; },
+    meetupDate: function (v) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(v || '')) return 'Please choose a meetup date.';
+      if (v < fv.minMeetup()) return "Meetups need 2 days' notice. Please pick a later date.";
+      if (v > fv.maxMeetup()) return 'Please pick a date within the next 60 days.';
+      return '';
+    },
+    // Shows or clears the message under a field. `el` is the input (or any element inside its .field).
+    setErr: function (el, msg) {
+      if (!el) return;
+      var box = el.closest('.field') || el.parentNode, p = box.querySelector(':scope > .field-err');
+      if (!msg) { if (p) p.remove(); el.removeAttribute('aria-invalid'); el.removeAttribute('aria-describedby'); box.classList.remove('has-err'); return; }
+      if (!p) { p = document.createElement('p'); p.className = 'field-err'; p.setAttribute('role', 'alert'); box.appendChild(p); }
+      p.id = 'err-' + (el.id || el.name || Math.random().toString(36).slice(2)); p.textContent = msg;
+      el.setAttribute('aria-invalid', 'true'); el.setAttribute('aria-describedby', p.id); box.classList.add('has-err');
+    },
+    clearAll: function (form) { form.querySelectorAll('.field-err').forEach(function (p) { p.remove(); }); form.querySelectorAll('[aria-invalid]').forEach(function (e) { e.removeAttribute('aria-invalid'); e.removeAttribute('aria-describedby'); }); form.querySelectorAll('.has-err').forEach(function (e) { e.classList.remove('has-err'); }); },
+    // rules: [{ name, el (optional), check: function (value, data) -> message or '' }]. Returns true when everything is fine;
+    // otherwise shows each message next to its field and jumps to the first one.
+    run: function (form, rules) {
+      fv.clearAll(form);
+      var data = {}; new FormData(form).forEach(function (v, k) { data[k] = typeof v === 'string' ? v.trim() : v; });
+      var first = null;
+      rules.forEach(function (r) {
+        var el = r.el || form.elements[r.name]; if (el && el.length && !el.tagName) el = el[0];
+        if (!el || (el.closest && el.closest('[hidden]'))) return;
+        var m = r.check(data[r.name] == null ? '' : data[r.name], data);
+        if (m) { fv.setErr(el, m); if (!first) first = el; }
+      });
+      if (first) fv.focus(first);
+      return !first;
+    },
+    focus: function (el) { try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); el.focus({ preventScroll: true }); } catch (e) {} },
+    // Server-side messages (keyed by field name) shown next to the matching inputs.
+    apply: function (form, fields) {
+      var first = null;
+      Object.keys(fields || {}).forEach(function (k) { var el = form.elements[k]; if (el && el.length && !el.tagName) el = el[0]; if (el) { fv.setErr(el, fields[k]); if (!first) first = el; } });
+      if (first) fv.focus(first);
+      return !!first;
+    },
+    // Re-checks a field when the person leaves it, once it has been shown as wrong or filled in.
+    live: function (form, rules) {
+      rules.forEach(function (r) {
+        var el = r.el || form.elements[r.name]; if (!el || el.length) return;
+        var again = function () { var d = {}; new FormData(form).forEach(function (v, k) { d[k] = typeof v === 'string' ? v.trim() : v; }); fv.setErr(el, r.check(d[r.name] == null ? '' : d[r.name], d)); };
+        el.addEventListener('blur', function () { if (el.value.trim() || el.hasAttribute('aria-invalid')) again(); });
+        el.addEventListener('input', function () { if (el.hasAttribute('aria-invalid')) again(); });
+      });
+    },
+    // Stops a form being sent twice: buttons are disabled until `done()` is called.
+    lock: function (form) {
+      var b = form.querySelectorAll('button[type=submit]'); b.forEach(function (x) { x.disabled = true; x.setAttribute('aria-busy', 'true'); });
+      return function () { b.forEach(function (x) { x.disabled = false; x.removeAttribute('aria-busy'); }); };
+    }
+  };
+
   // ---- analytics: fire-and-forget, never blocks the page ----
   function track(type, extra) {
     try {
@@ -39,7 +117,7 @@
       body: opts.body ? (isForm ? opts.body : JSON.stringify(opts.body)) : undefined
     });
     var data = await res.json().catch(function () { return {}; });
-    if (!res.ok) throw new Error(data.error || 'Something went wrong. Please try again.');
+    if (!res.ok) { var e = new Error(data.error || 'Something went wrong. Please try again.'); e.fields = data.fields || null; throw e; }
     return data;
   }
 
@@ -96,7 +174,7 @@
     var src = kind === 'main' ? p.imageUrl : (p.thumbUrl || p.imageUrl);
     if (src) {
       var size = kind === 'main' ? 1200 : 480;
-      return '<img src="' + esc(src) + '" alt="' + esc(p.brand + ' ' + p.model) + '" width="' + size + '" height="' + size + '" decoding="async"' + (eager ? ' fetchpriority="high"' : ' loading="lazy"') + '>';
+      return '<img src="' + esc(src) + '" alt="' + esc(p.brand + ' ' + p.model) + '" width="' + size + '" height="' + size + '" decoding="async"' + (eager ? ' loading="eager" fetchpriority="high"' : ' loading="lazy"') + '>';
     }
     return '<div class="card-ph" role="img" aria-label="' + esc(p.brand + ' ' + p.model + ': photo coming soon') + '">Photo coming soon</div>';
   }
@@ -110,7 +188,7 @@
     var href = '/product?id=' + encodeURIComponent(p.id);
     var wa = waLink('Hi TheTechMart, I am interested in the ' + deviceName(p) + ' (' + money(p.price) + '). Is it still available?');
     return '<article class="card">' +
-      '<a class="card-media" href="' + href + '" tabindex="-1" aria-hidden="true">' + media(p) +
+      '<a class="card-media" href="' + href + '" tabindex="-1" aria-hidden="true">' + media(p, opts.eager) +
         (p.deal && opts.flag !== false ? '<span class="card-flag badge badge-deal">October deal</span>' : '') + '</a>' +
       '<div class="card-body">' +
         '<a class="card-title" href="' + href + '">' + esc(p.brand + ' ' + p.model) + '</a>' +
@@ -150,5 +228,5 @@
 
   window.TTM = { boot: boot, cfg: cfg, esc: esc, money: money, waLink: waLink, track: track, api: api, toast: toast, I: I, CATS: CATS,
     gradeBadge: gradeBadge, warrantyBadge: warrantyBadge, isSold: isSold, stockLine: stockLine, media: media, card: card,
-    skeletons: skeletons, deviceName: deviceName, deliveryFee: DELIVERY_FEE };
+    skeletons: skeletons, deviceName: deviceName, deliveryFee: DELIVERY_FEE, fv: fv };
 })();

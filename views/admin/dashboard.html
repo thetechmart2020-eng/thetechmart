@@ -299,6 +299,8 @@ function renderOrders() {
       <td>
         ${o.fulfillmentMethod === 'collection'
           ? `<span class="helper">In-store collection</span>`
+          : o.fulfillmentMethod === 'meetup'
+          ? `<span class="helper"><strong>Meetup</strong>${o.deliveryAddress && o.deliveryAddress.meetup ? '<br>' + o.deliveryAddress.meetup.date + ', ' + o.deliveryAddress.meetup.slotLabel + '<br>' + o.deliveryAddress.meetup.area : ''}</span>`
           : `<span class="helper">${o.courier || 'Courier Guy'}${fmtAddress(o.deliveryAddress) ? '<br>' + fmtAddress(o.deliveryAddress) : ''}</span>`}
         ${o.trackingNumber ? `<div class="helper mono" style="margin-top:4px;">Tracking: ${o.trackingNumber}</div>` : ''}
         <button class="btn btn-ghost btn-sm" style="margin-top:6px;" onclick="setTracking('${o.id}')">${o.trackingNumber ? 'Edit' : 'Add'} tracking #</button>

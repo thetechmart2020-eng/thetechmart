@@ -66,12 +66,21 @@ if pass3:
 for f in shot_files:
     source.setdefault(f, 'stock/commons')
 
+# Photo swaps: this product uses another product's photo (byte-for-byte copy, nothing edited or cropped).
+# The 64GB iPhone 12 used a stock shot with AirTag boxes; it now uses the iPhone 12 128GB shot.
+SWAPS = {'apple-iphone-12-64gb': 'apple-iphone-12-128gb'}
+for dst, srcname in SWAPS.items():
+    if srcname + '.jpg' in credits: credits[dst + '.jpg'] = credits[srcname + '.jpg']
+    source[dst + '.jpg'] = source.get(srcname + '.jpg', 'stock/commons')
+
 manifest = {}; made = 0
 for f in sorted(os.listdir(src)):
     if not f.lower().endswith('.jpg'): continue
     slug = f[:-4]
-    shutil.copyfile(os.path.join(src, f), os.path.join(out_o, f))
-    im = Image.open(os.path.join(src, f)).convert('RGB')
+    real = SWAPS.get(slug, slug) + '.jpg'
+    if not os.path.exists(os.path.join(src, real)): real = f
+    shutil.copyfile(os.path.join(src, real), os.path.join(out_o, f))
+    im = Image.open(os.path.join(src, real)).convert('RGB')
     for w in (1200, 480):
         o = im.copy()
         if o.width > w: o = o.resize((w, round(o.height * w / o.width)), Image.LANCZOS)
