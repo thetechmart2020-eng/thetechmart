@@ -1052,7 +1052,7 @@ function renderView(name, { title, description, canonical, ogImage, ogType = 'we
 app.get('/sitemap.xml', asyncRoute(async (req, res) => {
   const base = siteBase(req);
   const products = await db.listProducts({ activeOnly: true });
-  const staticUrls = ['', '/sell', '/meetup', '/refer', '/policies', '/photo-credits'];
+  const staticUrls = ['', '/sell', '/meetup', '/refer', '/policies', '/terms', '/privacy', '/photo-credits'];
   const urls = [
     ...staticUrls.map((p) => `<url><loc>${base}${p}</loc><changefreq>daily</changefreq></url>`),
     ...products.map((p) => `<url><loc>${base}/product?id=${p.id}</loc><changefreq>weekly</changefreq></url>`)
@@ -1236,6 +1236,26 @@ ${rows ? `<ul class="credit-list">${rows}</ul>` : '<p>No Wikimedia Commons photo
 <h2>Other images</h2>
 <p>Remaining device pictures are royalty-free stock images that do not require a credit.</p>`;
 }
+
+app.get('/terms', (req, res) => {
+  const base = siteBase(req);
+  edgeCache(res, 300, 86400);
+  res.send(renderView('terms.html', {
+    title: 'Terms of sale | TheTechMart',
+    description: 'The terms for buying from and selling to TheTechMart: prices, offers, payment, delivery, meetups, warranty and referrals.',
+    canonical: `${base}/terms`
+  }, base));
+});
+
+app.get('/privacy', (req, res) => {
+  const base = siteBase(req);
+  edgeCache(res, 300, 86400);
+  res.send(renderView('privacy.html', {
+    title: 'Privacy policy | TheTechMart',
+    description: 'How TheTechMart handles your personal information under POPIA.',
+    canonical: `${base}/privacy`
+  }, base));
+});
 
 app.get('/photo-credits', (req, res) => {
   const base = siteBase(req);

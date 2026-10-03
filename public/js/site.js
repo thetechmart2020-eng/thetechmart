@@ -244,6 +244,40 @@
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 
+  // ---- analytics consent: Microsoft Clarity loads ONLY after the visitor taps Accept ----
+  // Everything typed into a form is masked so Clarity never records names, phones or addresses.
+  var CLARITY_ID = 'ys5sg0ftxq', CONSENT_KEY = 'ttm_consent';
+  function getConsent() { try { return localStorage.getItem(CONSENT_KEY); } catch (e) { return null; } }
+  function setConsent(v) { try { localStorage.setItem(CONSENT_KEY, v); } catch (e) {} }
+  function maskInputs(root) {
+    (root.querySelectorAll ? root.querySelectorAll('input,textarea,select') : []).forEach(function (el) { el.setAttribute('data-clarity-mask', 'True'); });
+    if (root.matches && root.matches('input,textarea,select')) root.setAttribute('data-clarity-mask', 'True');
+  }
+  function loadClarity() {
+    if (window.__clarityOn) return; window.__clarityOn = true;
+    maskInputs(document);
+    new MutationObserver(function (list) {
+      list.forEach(function (m) { m.addedNodes.forEach(function (n) { if (n.nodeType === 1) maskInputs(n); }); });
+    }).observe(document.body, { childList: true, subtree: true });
+    (function (c, l, a, r, i, t, y) {
+      c[a] = c[a] || function () { (c[a].q = c[a].q || []).push(arguments); };
+      t = l.createElement(r); t.async = 1; t.src = 'https://www.clarity.ms/tag/' + i;
+      y = l.getElementsByTagName(r)[0]; y.parentNode.insertBefore(t, y);
+    })(window, document, 'clarity', 'script', CLARITY_ID);
+  }
+  function consentBanner() {
+    var b = document.createElement('div'); b.className = 'consent'; b.setAttribute('role', 'dialog'); b.setAttribute('aria-label', 'Analytics');
+    b.innerHTML = '<p>We use Microsoft Clarity to see how visitors use the site, so we can fix what is confusing. What you type in forms is never recorded. <a href="/privacy">Privacy</a></p>' +
+      '<div class="consent-btns"><button type="button" class="btn btn-ghost" data-c="no">Decline</button><button type="button" class="btn btn-primary" data-c="yes">Accept</button></div>';
+    b.addEventListener('click', function (e) {
+      var v = e.target.getAttribute && e.target.getAttribute('data-c'); if (!v) return;
+      setConsent(v); b.remove(); if (v === 'yes') loadClarity();
+    });
+    document.body.appendChild(b);
+  }
+  function consentInit() { var c = getConsent(); if (c === 'yes') loadClarity(); else if (c !== 'no') consentBanner(); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', consentInit); else consentInit();
+
   window.TTM = { boot: boot, cfg: cfg, esc: esc, money: money, waLink: waLink, track: track, api: api, toast: toast, I: I, CATS: CATS,
     gradeBadge: gradeBadge, warrantyBadge: warrantyBadge, isSold: isSold, stockLine: stockLine, media: media, card: card,
     skeletons: skeletons, deviceName: deviceName, deliveryFee: DELIVERY_FEE, meetupFee: MEETUP_FEE, fv: fv };
