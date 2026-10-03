@@ -115,7 +115,7 @@
 
     <section class="admin-panel" id="panel-referrals">
       <div class="admin-head"><h2>Referrals</h2></div>
-      <p class="helper" style="margin-bottom:16px;">Rule: a referral is confirmed only after the order is paid and the payment has cleared. The referrer is paid 48 hours after you confirm. Pay them by hand (EFT or cash), then press Mark paid. Confirm and pay from the Orders tab.</p>
+      <p class="helper" style="margin-bottom:16px;">Rule: a referral is confirmed only after the order is paid and the payment has cleared. The referrer is paid 48 hours after you confirm. When you confirm, enter the gross profit left on the sale after any discount: R1000+ pays R300, R700 to R999 pays R200, R500 to R699 pays R150, under R500 pays R0. Pay by hand (EFT or cash), then press Mark paid. Confirm and pay from the Orders tab.</p>
       <table class="table" id="referrals-table">
         <thead><tr><th>Referrer</th><th>Waiting for confirmation</th><th>Confirmed, waiting 48h</th><th>Due now</th><th>Already paid</th></tr></thead>
         <tbody></tbody>
@@ -215,7 +215,7 @@ async function loadAll() {
     api('/api/admin/products'), api('/api/admin/offers'), api('/api/admin/tradeins')
   ]);
   ORDERS = await api('/api/admin/orders').catch(() => []);
-  REFERRERS = await api('/api/admin/referrers').catch(() => ({ payout: 300, delayHours: 48, referrers: [] }));
+  REFERRERS = await api('/api/admin/referrers').catch(() => ({ payout: 300, tiers: REFERRERS.tiers, minProfit: 500, delayHours: 48, referrers: [] }));
   renderProducts(); renderOffers(); renderTradeins(); renderOrders(); renderFollowups(); renderReferrals(); renderCounts();
 }
 
@@ -321,7 +321,7 @@ function renderTradeins() {
 }
 
 const ORDER_STATUSES = ['new', 'paid', 'completed', 'cancelled'];
-let REFERRERS = { payout: 300, delayHours: 48, referrers: [] };
+let REFERRERS = { payout: 300, tiers: [{ minProfit: 1000, payout: 300 }, { minProfit: 700, payout: 200 }, { minProfit: 500, payout: 150 }], minProfit: 500, delayHours: 48, referrers: [] };
 const DAY = 864e5;
 const payableAtMs = (o) => new Date(o.referralConfirmedAt).getTime() + REFERRERS.delayHours * 3600e3;
 const fmtWhen = (ms) => new Date(ms).toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg', dateStyle: 'medium', timeStyle: 'short' });
@@ -331,20 +331,31 @@ async function markPaid(id) {
   if (!confirm('Mark this order as paid? Only do this once the money has cleared in your account.')) return;
   try { await api(`/api/admin/orders/${id}`, { method: 'PUT', body: { paymentStatus: 'paid', status: 'paid' } }); toast('Marked as paid'); loadAll(); } catch (e) { toast(e.message); }
 }
+const payoutFor = (profit) => { for (const t of REFERRERS.tiers) if (profit >= t.minProfit) return t.payout; return 0; };
+const orderPayout = (o) => (o.referralPayout == null ? REFERRERS.payout : o.referralPayout);
 async function referralAction(id, action) {
-  const msg = action === 'confirm' ? 'Confirm this sale for the referrer? Payment must have cleared. They become payable in 48 hours.' : 'Have you paid the referrer? This only records that it was paid.';
-  if (!confirm(msg)) return;
-  try { await api(`/api/admin/orders/${id}/referral`, { method: 'POST', body: { action } }); toast(action === 'confirm' ? 'Referral confirmed' : 'Referral marked paid'); loadAll(); } catch (e) { toast(e.message); }
+  let body = { action };
+  if (action === 'confirm') {
+    const v = prompt('Gross profit LEFT on this sale after any discount, in rand.\n\nR1000+ pays R300, R700-999 pays R200, R500-699 pays R150, under R500 pays nothing.');
+    if (v === null) return;
+    const profit = Number(String(v).replace(/[^0-9.]/g, ''));
+    if (!String(v).trim() || !Number.isFinite(profit)) { toast('Enter the profit as a number'); return; }
+    const pay = payoutFor(profit);
+    if (!confirm(pay > 0 ? `Profit R${profit}: the referrer earns R${pay}. Confirm? Payment must have cleared. They become payable in 48 hours.` : `Profit R${profit} is under R${REFERRERS.minProfit}: the referrer earns R0. Record this?`)) return;
+    body.profit = profit;
+  } else if (!confirm('Have you paid the referrer? This only records that it was paid.')) return;
+  try { await api(`/api/admin/orders/${id}/referral`, { method: 'POST', body }); toast(action === 'confirm' ? 'Referral confirmed' : 'Referral marked paid'); loadAll(); } catch (e) { toast(e.message); }
 }
 function referralCell(o) {
   if (!o.referrerCode) return '';
   const r = referrerOf(o.referrerCode), who = r ? `${r.name} (${o.referrerCode})` : o.referrerCode;
   let state = '';
-  if (o.referralStatus === 'paid') state = `<span class="status-pill accepted">referrer paid</span>`;
+  if (o.referralStatus === 'paid') state = `<span class="status-pill accepted">referrer paid R${orderPayout(o)}</span>`;
+  else if (o.referralStatus === 'nopayout') state = `<span class="helper">No referral payout (profit R${o.referralProfit} is under R${REFERRERS.minProfit})</span>`;
   else if (o.referralStatus === 'confirmed') {
     const due = payableAtMs(o), ready = Date.now() >= due;
     state = ready
-      ? `<button class="btn btn-accept btn-sm" onclick="referralAction('${o.id}','paid')">Mark R${REFERRERS.payout} paid</button>`
+      ? `<button class="btn btn-accept btn-sm" onclick="referralAction('${o.id}','paid')">Mark R${orderPayout(o)} paid</button>`
       : `<span class="helper">Payable from ${fmtWhen(due)}</span>`;
   } else {
     state = o.paymentStatus === 'paid'
@@ -383,10 +394,11 @@ function renderReferrals() {
     const waiting = list.filter(o => !o.referralStatus), conf = list.filter(o => o.referralStatus === 'confirmed'), paid = list.filter(o => o.referralStatus === 'paid');
     const due = conf.filter(o => Date.now() >= payableAtMs(o)), soon = conf.filter(o => Date.now() < payableAtMs(o));
     dueTotal += due.length;
-    const msg = `Hi ${r ? r.name : ''}, it's TheTechMart. Your referral sale${due.length === 1 ? ' has' : 's have'} been confirmed. We're paying you R${due.length * REFERRERS.payout} now. Thank you!`;
+    const dueRand = due.reduce((n, o) => n + orderPayout(o), 0);
+    const msg = `Hi ${r ? r.name : ''}, it's TheTechMart. Your referral sale${due.length === 1 ? ' has' : 's have'} been confirmed. We're paying you R${dueRand} now. Thank you!`;
     return `<tr><td><b>${r ? r.name : code}</b><br><span class="helper">${code}${r ? ' · ' + r.phone : ''}</span></td>
       <td>${waiting.length}</td><td>${soon.length}</td>
-      <td>${due.length ? `<b>${due.length}</b> (R${due.length * REFERRERS.payout}) ${r ? `<a class="btn btn-ghost btn-sm" href="${waLinkClient(r.phone, msg)}" target="_blank">WhatsApp</a>` : ''}` : '0'}</td>
+      <td>${due.length ? `<b>${due.length}</b> (R${dueRand}) ${r ? `<a class="btn btn-ghost btn-sm" href="${waLinkClient(r.phone, msg)}" target="_blank">WhatsApp</a>` : ''}` : '0'}</td>
       <td>${paid.length}</td></tr>`;
   });
   document.getElementById('c-referrals').textContent = dueTotal || '';

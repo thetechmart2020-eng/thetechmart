@@ -58,6 +58,7 @@ const orderOut = (r) => ({
   invoiceNumber: r.invoice_number || '', invoiceUrl: r.invoice_url || '',
   amount: Number(r.amount),
   referrerCode: r.referrer_code || '', referralStatus: r.referral_status || '',
+  referralProfit: r.referral_profit == null ? null : Number(r.referral_profit), referralPayout: r.referral_payout == null ? null : Number(r.referral_payout),
   referralConfirmedAt: r.referral_confirmed_at || null, referralPaidAt: r.referral_paid_at || null,
   status: r.status, notes: r.notes, createdAt: r.created_at, updatedAt: r.updated_at
 });
@@ -302,6 +303,8 @@ async function updateOrder(id, patch) {
   if (patch.paymentRef !== undefined) row.payment_ref = patch.paymentRef;
   if (patch.referralStatus !== undefined) row.referral_status = patch.referralStatus;
   if (patch.referralConfirmedAt !== undefined) row.referral_confirmed_at = patch.referralConfirmedAt;
+  if (patch.referralProfit !== undefined) row.referral_profit = patch.referralProfit;
+  if (patch.referralPayout !== undefined) row.referral_payout = patch.referralPayout;
   if (patch.referralPaidAt !== undefined) row.referral_paid_at = patch.referralPaidAt;
   if (patch.quoteNumber !== undefined) row.quote_number = patch.quoteNumber;
   if (patch.quoteUrl !== undefined) row.quote_url = patch.quoteUrl;

@@ -953,7 +953,7 @@ app.post('/api/admin/orders/:id/invoice', requireAdmin, asyncRoute(async (req, r
 // Referral payouts. Rule: the sale must be PAID (cleared) before it can be confirmed, and the referrer
 // is paid 48 hours after confirmation. Paying is done by hand; the button only records that it happened.
 app.get('/api/admin/referrers', requireAdmin, asyncRoute(async (req, res) => {
-  res.json({ payout: R.PAYOUT, delayHours: R.PAYOUT_DELAY_HOURS, referrers: await db.listReferrers() });
+  res.json({ payout: R.PAYOUT, tiers: R.TIERS, minProfit: R.MIN_PROFIT, delayHours: R.PAYOUT_DELAY_HOURS, referrers: await db.listReferrers() });
 }));
 app.post('/api/admin/orders/:id/referral', requireAdmin, asyncRoute(async (req, res) => {
   const order = await db.getOrder(req.params.id);
@@ -962,10 +962,13 @@ app.post('/api/admin/orders/:id/referral', requireAdmin, asyncRoute(async (req, 
   if (action === 'confirm') {
     if (order.referralStatus) return res.status(400).json({ error: 'This referral is already confirmed.' });
     if (order.paymentStatus !== 'paid') return res.status(400).json({ error: 'Mark the order as paid first. A referral is only confirmed once the payment has cleared.' });
-    return res.json(await db.updateOrder(order.id, { referralStatus: 'confirmed', referralConfirmedAt: new Date().toISOString() }));
+    const profit = Number(req.body.profit);
+    if (req.body.profit === undefined || req.body.profit === '' || !Number.isFinite(profit) || profit < 0 || profit > 1e6) return res.status(400).json({ error: 'Enter the gross profit left on this sale (in rand, 0 or more).' });
+    const payout = R.payoutForProfit(profit);
+    return res.json(await db.updateOrder(order.id, { referralStatus: payout > 0 ? 'confirmed' : 'nopayout', referralProfit: Math.round(profit), referralPayout: payout, referralConfirmedAt: new Date().toISOString() }));
   }
   if (action === 'paid') {
-    if (order.referralStatus !== 'confirmed') return res.status(400).json({ error: order.referralStatus === 'paid' ? 'Already marked as paid.' : 'Confirm the sale first.' });
+    if (order.referralStatus !== 'confirmed') return res.status(400).json({ error: order.referralStatus === 'paid' ? 'Already marked as paid.' : order.referralStatus === 'nopayout' ? 'This sale has no referral payout.' : 'Confirm the sale first.' });
     const due = R.payableAt(order.referralConfirmedAt);
     if (Date.now() < due.getTime()) return res.status(400).json({ error: `Payable from ${due.toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg' })} (48 hours after confirmation).` });
     return res.json(await db.updateOrder(order.id, { referralStatus: 'paid', referralPaidAt: new Date().toISOString() }));
@@ -1169,7 +1172,7 @@ app.get('/', asyncRoute(async (req, res) => {
   if (boot) edgeCache(res, 30, 600);
   res.send(renderView('index.html', {
     title: 'TheTechMart | Quality-checked phones & tech, 3-month warranty, 2-day delivery',
-    description: 'Shop Grade A-B pre-owned phones, laptops and consoles with a 3-month warranty and 2-day Courier Guy delivery. Make an offer, trade in your device, or earn R300 per referral.',
+    description: 'Shop Grade A-B pre-owned phones, laptops and consoles with a 3-month warranty and 2-day Courier Guy delivery. Make an offer, trade in your device, or earn up to R300 per referral.',
     canonical: `${base}/`,
     jsonld: [
       {
