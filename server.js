@@ -15,6 +15,7 @@ const deals = require('./lib/deals');
 const V = require('./lib/validate');
 const R = require('./lib/referral');
 const mail = require('./lib/mailer');
+const BN = require('./lib/blackNovember');
 
 // Flat Courier Guy delivery fee in rand. Collection is R0. This is the ONE place the fee is set:
 // checkout, the saved order, the WhatsApp/email message, the Yoco amount and the site text all use it.
@@ -125,7 +126,8 @@ function publicProduct(p) {
     const ref = repoPhoto(p);
     if (ref) { images = [ref.src]; extra = { indicative: true, photoCredit: ref.credit }; }
   }
-  return { ...p, ...extra, images, imageUrl: p.imageUrl || images[0] || null, thumbs: images.map(thumbOf), deal: deals.isDeal(p) };
+  const bn = BN.isCampaign(p);
+  return { ...p, ...extra, images, imageUrl: p.imageUrl || images[0] || null, thumbs: images.map(thumbOf), deal: deals.isDeal(p) || bn, bn };
 }
 
 // Small card version of a product photo. Photos uploaded through the admin come as
@@ -143,7 +145,7 @@ function cardProduct(p) {
   return {
     id: p.id, brand: p.brand, model: p.model, category: p.category, price: p.price, condition: p.condition,
     storage: p.storage, color: p.color, stock: p.stock, imageUrl: p.imageUrl || null,
-    thumbUrl: p.imageUrl ? thumbOf(p.imageUrl) : null, deal: deals.isDeal(p)
+    thumbUrl: p.imageUrl ? thumbOf(p.imageUrl) : null, deal: deals.isDeal(p) || BN.isCampaign(p), bn: BN.isCampaign(p)
   };
 }
 
@@ -388,8 +390,11 @@ app.post('/api/checkout', asyncRoute(async (req, res) => {
   const isPreOrder = product.stock < 1;
 
   // Three ways to get the device: Courier Guy delivery ('delivery'), collection, or a meetup by appointment.
-  const method = ['collection', 'meetup'].includes(fulfillmentMethod) ? fulfillmentMethod : 'delivery';
+  // Both must be chosen explicitly: a missing or unknown value is an error, never a silent default.
+  const method = ['delivery', 'collection', 'meetup'].includes(fulfillmentMethod) ? fulfillmentMethod : null;
   const fields = {};
+  if (!method) fields.fulfillmentMethod = 'Please choose how you would like to receive your device: courier, collection or meetup.';
+  if (!['card', 'eft', 'cash'].includes(paymentPreference)) fields.pay = 'Please choose how you would like to pay.';
   const name = V.oneLine(req.body.name, 80); if (name.length < 2) fields.name = MSG_NAME;
   const ph = V.phone(req.body.phone); if (!ph.ok) fields.phone = MSG_PHONE;
   const em = V.email(req.body.email); if (!em.ok) fields.email = MSG_EMAIL;
@@ -1143,7 +1148,7 @@ function renderView(name, { title, description, canonical, ogImage, ogType = 'we
 app.get('/sitemap.xml', asyncRoute(async (req, res) => {
   const base = siteBase(req);
   const products = await db.listProducts({ activeOnly: true });
-  const staticUrls = ['', '/sell', '/meetup', '/refer', '/track', '/policies', '/terms', '/privacy', '/photo-credits'];
+  const staticUrls = ['', '/black-november', '/sell', '/meetup', '/refer', '/track', '/policies', '/terms', '/privacy', '/photo-credits'];
   const urls = [
     ...staticUrls.map((p) => `<url><loc>${base}${p}</loc><changefreq>daily</changefreq></url>`),
     ...products.map((p) => `<url><loc>${base}/product?id=${p.id}</loc><changefreq>weekly</changefreq></url>`)
@@ -1157,9 +1162,10 @@ app.get('/sitemap.xml', asyncRoute(async (req, res) => {
 // deals draw instantly with no extra requests.
 app.get('/', asyncRoute(async (req, res) => {
   const base = siteBase(req);
-  let boot = null;
+  let boot = null, bnLive = false;
   try {
     const [products, cfg] = await Promise.all([db.listProducts({ activeOnly: true }), db.getConfig()]);
+    bnLive = BN.resolve(BN.OFFERS, products).some((r) => r.ok);   // banner only while at least one campaign deal is really live
     boot = {
       cfg: publicConfig(cfg),
       products: products.map(cardProduct),
@@ -1170,7 +1176,7 @@ app.get('/', asyncRoute(async (req, res) => {
     console.error('[home] boot data unavailable:', err.message);
   }
   if (boot) edgeCache(res, 30, 600);
-  res.send(renderView('index.html', {
+  const page = renderView('index.html', {
     title: 'TheTechMart | Quality-checked phones & tech, 3-month warranty, 2-day delivery',
     description: 'Shop Grade A-B pre-owned phones, laptops and consoles with a 3-month warranty and 2-day Courier Guy delivery. Make an offer, trade in your device, or earn up to R300 per referral.',
     canonical: `${base}/`,
@@ -1194,7 +1200,8 @@ app.get('/', asyncRoute(async (req, res) => {
       }
     ],
     boot
-  }, base));
+  }, base);
+  res.send(page.replace('<!--BNBANNER-->', bnLive ? '<div class="bn-banner"><a href="/black-november">Black November deals are live <span>See the deals &rarr;</span></a></div>' : ''));
 }));
 
 // Product page: this device (and a few similar ones) are embedded in the HTML, plus
@@ -1357,6 +1364,113 @@ app.get('/photo-credits', (req, res) => {
     canonical: `${base}/photo-credits`
   }, base).replace('<!--CREDITS-->', () => photoCreditsHtml()));
 });
+
+// ================= BLACK NOVEMBER (campaign page) =================
+// Offers live in lib/blackNovember.js and are only shown while the live catalogue price equals the
+// approved campaign price, so this page, the product page, checkout and price list always agree.
+function bnMedia(p, offer) {
+  const name = `${p.brand} ${p.model}${p.storage ? ' ' + p.storage : ''}`;
+  if (offer.noStockPhoto) return `<span class="bn-media"><span class="bn-ph">Photo coming soon</span></span>`;
+  const pub = publicProduct(p);
+  const src = (pub.images && pub.images[0]) ? thumbOf(pub.images[0]) : null;
+  if (!src) return `<span class="bn-media"><span class="bn-ph">Photo coming soon</span></span>`;
+  return `<span class="bn-media"><img src="${escapeHtml(src)}" alt="${escapeHtml(name)}${pub.indicative ? ' (indicative photo)' : ''}" loading="lazy" decoding="async">${pub.indicative ? '<span class="bn-indic">Indicative photo</span>' : ''}</span>`;
+}
+function bnCard(r, waNum) {
+  const p = r.product, o = r.offer, name = `${p.brand} ${p.model}`;
+  const href = '/product?id=' + encodeURIComponent(p.id);
+  const sold = Number(p.stock) < 1;
+  const msg = `Hi TheTechMart, I am interested in the ${name} ${p.storage || ''} (${fmtR(p.price)}) Black Friday deal. Is it still available?`.replace(/\s+/g, ' ');
+  return `<article class="bn-card">
+  <a class="bn-media-link" href="${href}" tabindex="-1" aria-hidden="true" style="position:relative;display:block">${bnMedia(p, o)}<span class="badge badge-bn">Black Friday deal</span></a>
+  <div class="bn-card-body">
+    <a class="bn-card-title" href="${href}">${escapeHtml(name)}</a>
+    <div class="card-sub">${escapeHtml([p.storage, p.color].filter(Boolean).join(' · '))}</div>
+    <div class="badges"><span class="badge badge-grade">Grade A-B</span><span class="badge badge-warranty">21-day warranty</span></div>
+    <div class="bn-price">${fmtR(p.price)}</div>
+    <div class="card-actions">${sold
+      ? `<a class="btn btn-ghost" data-wa href="${waLink(waNum, msg)}" target="_blank" rel="noopener">Ask on WhatsApp</a>`
+      : `<a class="btn btn-gold" href="/checkout?id=${encodeURIComponent(p.id)}">Buy now</a><a class="btn btn-ghost" href="${href}#offer">Make an offer</a>`}</div>
+  </div>
+</article>`;
+}
+function bnRow(r, waNum) {
+  const p = r.product, o = r.offer, name = `${p.brand} ${p.model}`;
+  const href = '/product?id=' + encodeURIComponent(p.id);
+  const sold = Number(p.stock) < 1;
+  const msg = `Hi TheTechMart, I am interested in the ${name} ${p.storage || ''} (${fmtR(p.price)}) Black Friday deal. Is it still available?`.replace(/\s+/g, ' ');
+  const tag = o.cond === 'new' ? 'New' : 'Grade A-B';
+  return `<li class="bn-row"><a class="bn-row-name" href="${href}"><span>${escapeHtml(name)}</span><small>${escapeHtml([p.storage, tag].filter(Boolean).join(' · '))}</small></a>
+  <span class="bn-row-price">${fmtR(p.price)}</span>
+  ${sold ? `<a class="btn btn-ghost" data-wa href="${waLink(waNum, msg)}" target="_blank" rel="noopener">Ask</a>` : `<a class="btn btn-gold" href="/checkout?id=${encodeURIComponent(p.id)}">Buy</a>`}</li>`;
+}
+// Order-only specials: no live catalogue product, so they are never shown as in stock.
+// Each row links to WhatsApp to confirm availability and delivery time before any payment.
+function bnOrderRow(r, waNum) {
+  const o = r.offer, name = `${o.brand} ${o.model}`;
+  const tag = o.cond === 'new' ? 'New' : 'Grade A-B';
+  const msg = `Hi TheTechMart, I saw the ${name} ${o.storage || ''} Black Friday special (${fmtR(o.price)}) on your Black November page. Is it available to order?`.replace(/\s+/g, ' ');
+  return `<li class="bn-row bn-row-order"><span class="bn-row-name"><span>${escapeHtml(name)}</span><small>${escapeHtml([o.storage, tag, 'To order'].filter(Boolean).join(' · '))}</small></span>
+  <span class="bn-row-order-meta"><span class="bn-row-price">${fmtR(o.price)}</span>
+  ${o.warranty ? `<span class="badge badge-warranty">${escapeHtml(o.warranty)}</span>` : ''}
+  <a class="btn btn-ghost" data-wa href="${waLink(waNum, msg)}" target="_blank" rel="noopener">Enquire</a></span></li>`;
+}
+function bnGroups(list, waNum, rowFn) {
+  rowFn = rowFn || bnRow;
+  const order = [];
+  for (const r of list) if (!order.includes(r.offer.group)) order.push(r.offer.group);
+  return order.map((g) => `<h3 class="bn-group">${escapeHtml(g)}</h3><ul class="bn-rows">${list.filter((r) => r.offer.group === g).map((r) => rowFn(r, waNum)).join('')}</ul>`).join('');
+}
+function bnFeature(r) {
+  const p = r.product, name = `${p.brand} ${p.model}`;
+  return `<a class="bn-feature" href="/product?id=${encodeURIComponent(p.id)}" aria-label="${escapeHtml(name + ' ' + (p.storage || ''))} Black Friday deal, ${fmtR(p.price)}">
+  ${bnMedia(p, r.offer)}
+  <div class="bn-feature-body"><span class="badge badge-bn">Black Friday deal</span><h3>${escapeHtml(name)} ${escapeHtml(p.storage || '')}</h3><div class="bn-price">${fmtR(p.price)}</div></div>
+</a>`;
+}
+function bnReview(all, products) {
+  const sp = BN.resolve(BN.SPECIALS, products);
+  const row = (r) => `<tr><td>${escapeHtml(r.offer.brand + ' ' + r.offer.model + ' ' + (r.offer.storage || '') + (r.offer.cond === 'new' ? ' (new)' : ''))}</td><td>${fmtR(r.offer.price)}</td><td>${r.product ? fmtR(r.product.price) : 'no match'}</td><td class="${r.ok ? 'good' : 'bad'}">${r.ok ? 'shown' : 'HIDDEN: ' + escapeHtml(r.why)}</td></tr>`;
+  const oct = deals.DEALS.map((d) => { const p = products.find((x) => x.active !== false && deals.matches(d, x)); return `<tr><td>${escapeHtml(d.brand + ' ' + d.model + ' ' + (d.storage || ''))}</td><td>${p ? fmtR(p.price) : 'no match'}</td><td>Not included. Existing October deal, unchanged.</td></tr>`; }).join('');
+  return `<section class="bn-review"><div class="wrap"><h2>OWNER REVIEW PANEL (preview only, not part of the live page)</h2>
+<p>Campaign prices come from the approved list and need your confirmation. An offer is hidden unless the live product price equals its campaign price.</p>
+<table><tr><th>Campaign offer</th><th>Approved price</th><th>Live price</th><th>Status</th></tr>${all.map(row).join('')}</table>
+<h2>November specials (${sp.filter((r) => r.ok).length} of ${sp.length} ready to show)</h2>
+<table><tr><th>Special</th><th>Approved price</th><th>Live price</th><th>Status</th></tr>${sp.map(row).join('')}</table>
+<h2>Existing October deals, shown for review only (not on this page)</h2>
+<table><tr><th>Deal</th><th>Live price</th><th>Status</th></tr>${oct}</table></div></section>`;
+}
+app.get('/black-november', asyncRoute(async (req, res) => {
+  const base = siteBase(req);
+  const [products, cfg] = await Promise.all([db.listProducts({ activeOnly: true }), db.getConfig()]);
+  const all = BN.resolve(BN.OFFERS, products);
+  const live = all.filter((r) => r.ok);
+  const review = process.env.BN_REVIEW === '1' && req.query.review === '1';
+  if (!live.length && !review) return res.redirect(302, '/');
+  const wa = String((cfg && cfg.whatsappNumber) || '27716623565');
+  const specials = BN.resolve(BN.SPECIALS, products).filter((r) => r.ok);
+  const orderOnly = BN.resolve(BN.SPECIALS, products).filter((r) => !r.ok && !r.product && !r.offer.hold);
+  const feature = live.find((r) => r.offer.feature) || live[0];
+  let html = renderView('black-november.html', {
+    title: 'Black November deals | TheTechMart',
+    description: 'Black Friday headline deals on Grade A-B checked pre-owned iPhones with a 21-day replacement warranty. Courier nationwide in about 2 days. Make an offer on WhatsApp.',
+    canonical: `${base}/black-november`, noindex: review, boot: { cfg: publicConfig(cfg) }
+  }, base);
+  html = html.split('{{WA}}').join(escapeHtml(wa))
+    .split('{{WADISPLAY}}').join(escapeHtml(waDisplay(wa)))
+    .split('{{REFSPECIAL}}').join(String(BN.REFERRAL_SPECIAL)).split('{{REFTOP}}').join(String(BN.REFERRAL_TOP));
+  html = html.replace('<!--BN_FEATURE-->', () => (feature ? bnFeature(feature) : ''))
+    .replace('<!--BN_CARDS-->', () => `<div class="bn-grid">${live.map((r) => bnCard(r, wa)).join('')}</div>`)
+    .replace('<!--BN_SPECIALS-->', () => (specials.length
+      ? `<section class="section section-alt" id="specials"><div class="wrap"><div class="section-head"><div><h2>November specials</h2><p class="bn-note">Refer a friend who buys a November special and earn R${BN.REFERRAL_SPECIAL}.</p></div></div>${bnGroups(specials, wa)}<p class="bn-foot">Normal prices carry a 3-month store warranty. Black Friday prices carry a 21-day replacement benefit. These store benefits do not limit your rights under the Consumer Protection Act. Prices subject to review at time of inquiry. Availability confirmed on WhatsApp ${escapeHtml(waDisplay(wa))}.</p></div></section>`
+      : (review ? '<section class="section section-alt"><div class="wrap"><h2>November specials</h2><p class="bn-empty">No confirmed offers yet, so this whole section is hidden on the live page. Note to show here when it has offers: "Refer a friend who buys a November special and earn R' + BN.REFERRAL_SPECIAL + '."</p></div></section>' : '')))
+    .replace('<!--BN_ORDER_ONLY-->', () => (orderOnly.length
+      ? `<section class="section" id="available-to-order"><div class="wrap"><div class="section-head"><div><h2>Available to order</h2><p class="bn-note">These Black Friday specials are sourced to order and are not in the online catalogue. Enquire on WhatsApp and we confirm availability and delivery time before you pay.</p></div></div>${bnGroups(orderOnly, wa, bnOrderRow)}<p class="bn-foot">Available-to-order specials are confirmed on WhatsApp before payment. Black Friday prices carry a 21-day replacement benefit. This does not limit your rights under the Consumer Protection Act.</p></div></section>`
+      : ''))
+    .replace('<!--BN_REVIEW-->', () => (review ? bnReview(all, products) : ''));
+  if (!review) edgeCache(res, 30, 600);
+  res.send(html);
+}));
 
 app.get('/refer', asyncRoute(async (req, res) => {
   const base = siteBase(req);

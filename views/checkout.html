@@ -58,9 +58,9 @@
         '<div style="display:grid;gap:18px">' +
           '<section class="box"><h2>How would you like to get it?</h2>' +
             '<div class="choice" id="ful">' +
-              '<label><input type="radio" name="fulfillmentMethod" value="delivery" checked><span>Courier: ' + T.money(FEE) + ' flat, nationwide<small>The Courier Guy, about 2 days, to your South African address</small></span></label>' +
-              '<label><input type="radio" name="fulfillmentMethod" value="collection"><span>Collection: R0<small>North Riding / Kya Sands. Exact location shared on WhatsApp</small></span></label>' +
-              '<label><input type="radio" name="fulfillmentMethod" value="meetup"><span>Meetup: ' + T.money(T.meetupFee) + '<small>Saturdays and Sundays only, booked 2 days ahead. Special request fee</small></span></label>' +
+              '<label><input type="radio" name="fulfillmentMethod" value="delivery" required checked><span>Courier: ' + T.money(FEE) + ' flat, nationwide<small>The Courier Guy, about 2 days, to your South African address</small></span></label>' +
+              '<label><input type="radio" name="fulfillmentMethod" value="collection" required><span>Collection: R0<small>North Riding / Kya Sands. Exact location shared on WhatsApp</small></span></label>' +
+              '<label><input type="radio" name="fulfillmentMethod" value="meetup" required><span>Meetup: ' + T.money(T.meetupFee) + '<small>Saturdays and Sundays only, booked 2 days ahead. Special request fee</small></span></label>' +
             '</div>' +
             '<div id="addr" style="margin-top:16px">' +
               '<div class="field"><label for="c-line1">Street address</label><input id="c-line1" name="line1" autocomplete="address-line1" placeholder="Street and number, unit or complex" maxlength="120"></div>' +
@@ -87,9 +87,9 @@
           '<section class="box"><h2>How would you like to pay?</h2>' +
             '<div class="field" style="margin-bottom:0"><div class="choice" id="pay-choice">' +
               (cardLive
-                ? '<label><input type="radio" name="pay" value="card" checked><span>Yoco (card)<small>You are taken to a secure Yoco payment page for the total</small></span></label>'
+                ? '<label><input type="radio" name="pay" value="card" required checked><span>Yoco (card)<small>You are taken to a secure Yoco payment page for the total</small></span></label>'
                 : '<label style="opacity:.55;cursor:not-allowed"><input type="radio" name="pay" value="card" disabled><span>Yoco (card)<small>Not available yet</small></span></label>') +
-              '<label><input type="radio" name="pay" value="eft"' + (cardLive ? '' : ' checked') + '><span>EFT<small>We send our bank details on WhatsApp</small></span></label>' +
+              '<label><input type="radio" name="pay" value="eft" required' + (cardLive ? '' : ' checked') + '><span>EFT<small>We send our bank details on WhatsApp</small></span></label>' +
               '<label id="cash-opt" hidden><input type="radio" name="pay" value="cash"><span>Cash on collection (meetup or pickup only)<small>Not available for courier delivery.</small></span></label>' +
             '</div></div>' +
             '<p class="notice" id="pay-note" hidden>For a meetup you can pay by Yoco or EFT before we meet, or pay cash at the meetup.</p>' +
@@ -118,6 +118,9 @@
     function syncFulfil() {
       var m = form.fulfillmentMethod.value, courier = m === 'delivery', fee = courier ? FEE : (m === 'meetup' ? T.meetupFee : 0);
       $('addr').hidden = !courier; $('meet').hidden = m !== 'meetup';
+      // Required only for the chosen method (the form keeps novalidate: our own messages show next to each field).
+      ['c-line1', 'c-line2', 'c-city', 'c-post', 'c-prov'].forEach(function (id) { var el = $(id); el.required = courier; el.setAttribute('aria-required', courier ? 'true' : 'false'); });
+      ['c-marea', 'c-mdate', 'c-mslot'].forEach(function (id) { var el = $(id); el.required = m === 'meetup'; el.setAttribute('aria-required', m === 'meetup' ? 'true' : 'false'); });
       $('del-label').textContent = courier ? 'Delivery (The Courier Guy, about 2 days)' : (m === 'meetup' ? 'Meetup fee (special request)' : 'Collection');
       $('del-amt').textContent = T.money(fee);
       $('total-amt').textContent = T.money(p.price + fee);

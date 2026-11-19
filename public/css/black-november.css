@@ -1,0 +1,71 @@
+/* Black November campaign page. Same dark system and green accent; gold marks the campaign only. */
+:root { --gold: #E8C258; --gold-ink: #1a1405; --gold-line: rgba(232,194,88,.45); --gold-soft: rgba(232,194,88,.12); }
+.btn-gold { background: var(--gold); color: var(--gold-ink); }
+.btn-gold:hover { box-shadow: 0 0 0 4px rgba(232,194,88,.22); }
+.bn-eyebrow { color: var(--gold); font: 600 13px/1 var(--font-body); letter-spacing: .14em; text-transform: uppercase; margin-bottom: 14px; }
+
+.bn-hero { padding: 40px 0 36px; background: radial-gradient(900px 340px at 85% -10%, rgba(232,194,88,.14), transparent 60%), var(--bg); border-bottom: 1px solid var(--line); }
+.bn-hero-grid { display: grid; gap: 28px; align-items: center; }
+.bn-hero h1 { font-size: clamp(32px, 8vw, 58px); max-width: 17ch; }
+.bn-tag { color: var(--accent); font: 600 15px/1 var(--font-display); margin-top: 16px; letter-spacing: .02em; }
+.bn-hero .lede { color: var(--muted); font-size: 18px; margin-top: 16px; max-width: 54ch; }
+.bn-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 26px; }
+.bn-actions .btn { flex: 1 1 200px; }
+@media (min-width: 900px) { .bn-hero-grid { grid-template-columns: 1.15fr .85fr; gap: 48px; } }
+
+.bn-feature { display: block; text-decoration: none; background: var(--surface); border: 1px solid var(--gold-line); border-radius: var(--radius); overflow: hidden; box-shadow: 0 0 0 1px rgba(232,194,88,.08), 0 18px 50px rgba(0,0,0,.45); }
+.bn-feature .bn-media { aspect-ratio: 4 / 3; }
+.bn-feature-body { padding: 16px 18px 20px; display: grid; gap: 8px; }
+.bn-feature h3 { font-size: 22px; }
+.bn-price { font: 700 34px/1 var(--font-display); color: var(--gold); }
+.bn-feature .badge-bn { align-self: start; justify-self: start; }
+
+.bn-media { position: relative; display: block; background: linear-gradient(160deg, #1b2025, #121518); overflow: hidden; }
+.bn-media img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: 10px; }
+.bn-ph { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 14px; text-align: center; padding: 12px; }
+.bn-indic { position: absolute; left: 8px; bottom: 8px; font-size: 11.5px; color: #cfd5d2; background: rgba(10,11,12,.75); border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; }
+
+.badge-bn, .badge-deal.badge-bn { background: var(--gold); color: var(--gold-ink); border-color: var(--gold); }
+.bn .badge-warranty { background: var(--gold-soft); border-color: var(--gold-line); }
+
+.bn-note { color: var(--muted); margin-top: 8px; max-width: 70ch; font-size: 15px; }
+.bn-grid { display: grid; gap: 14px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 900px) { .bn-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; } }
+@media (max-width: 380px) { .bn-grid { grid-template-columns: 1fr; } }
+.bn-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; }
+.bn-card:hover { border-color: var(--gold-line); }
+.bn-card .bn-media { aspect-ratio: 1 / 1; }
+.bn-card .badge-bn { position: absolute; left: 8px; top: 8px; z-index: 2; }
+.bn-card-body { padding: 12px 12px 14px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+.bn-card-title { font: 600 16px/1.25 var(--font-display); text-decoration: none; }
+.bn-card .bn-price { font-size: 24px; margin-top: auto; padding-top: 4px; }
+.bn-card .card-actions .btn { min-height: 48px; padding: 0 12px; font-size: 15px; }
+.bn-foot { color: var(--muted); font-size: 14px; margin-top: 20px; }
+.bn-empty { border: 1px dashed var(--line); border-radius: var(--radius); padding: 22px; color: var(--muted); }
+
+.bn-ref-wrap { padding-top: 8px; }
+.bn-ref { display: grid; gap: 18px; align-items: center; background: linear-gradient(135deg, rgba(232,194,88,.12), rgba(232,194,88,.03)); border: 1px solid var(--gold-line); border-radius: var(--radius); padding: 24px 20px; }
+.bn-ref h2 { font-size: clamp(22px, 4.6vw, 30px); max-width: 30ch; }
+@media (min-width: 760px) { .bn-ref { grid-template-columns: 1fr auto; padding: 28px 32px; } }
+
+/* Owner review panel (only shown with ?review=1 on the preview server, never in production) */
+.bn-review { background: #1a1405; border-bottom: 2px solid var(--gold); padding: 18px 0; font-size: 14px; }
+.bn-review h2 { font-size: 18px; color: var(--gold); margin-bottom: 8px; }
+.bn-review table { width: 100%; border-collapse: collapse; margin: 8px 0 14px; }
+.bn-review th, .bn-review td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #3a3115; vertical-align: top; }
+.bn-review .bad { color: #ff9b9b; } .bn-review .good { color: var(--accent); }
+
+/* November specials: compact grouped rows (61 offers) */
+.bn-group{margin:28px 0 10px;font-size:1.05rem;color:var(--gold)}
+.bn-rows{list-style:none;margin:0;padding:0;border-top:1px solid var(--line,rgba(255,255,255,.12))}
+.bn-row{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line,rgba(255,255,255,.12))}
+.bn-row-name{display:flex;flex-direction:column;color:inherit;text-decoration:none;min-width:0}
+.bn-row-name span{font-weight:600;overflow-wrap:anywhere}
+.bn-row-name small{opacity:.7}
+.bn-row-price{font-weight:700;color:var(--gold);white-space:nowrap}
+.bn-row .btn{padding:8px 16px;min-height:40px}
+@media (max-width:420px){.bn-row{gap:8px}.bn-row-price{font-size:.95rem}.bn-row .btn{padding:6px 14px;min-width:64px}}
+/* Available-to-order rows: name on its own line; price, warranty badge and the enquiry
+   button sit together on the line below so narrow screens never squeeze the name. */
+.bn-row-order{grid-template-columns:1fr;gap:6px}
+.bn-row-order-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap}

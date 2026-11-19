@@ -420,3 +420,9 @@ input[type=date] { color-scheme: dark; }
 .track-steps li.done { color: var(--text); }
 .track-steps .dot { flex: none; width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--line); display: grid; place-items: center; font-size: 14px; font-weight: 700; }
 .track-steps li.done .dot { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+
+/* ---------- Black November banner (homepage; links to /black-november) ---------- */
+.bn-banner { background: #15120a; border-bottom: 1px solid rgba(232,194,88,.45); }
+.bn-banner a { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; min-height: 44px; padding: 8px 16px; text-decoration: none; color: #E8C258; font: 600 14.5px/1.3 var(--font-body); text-align: center; }
+.bn-banner a:hover { color: #f3d98a; }
+.bn-banner span { color: #f4f6f5; font-weight: 500; }

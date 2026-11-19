@@ -155,7 +155,7 @@
     return { text: 'Grade A-B', cls: 'badge-grade' };
   }
   // Normal-price devices: 3-month warranty. Negotiated (special-price) devices, flagged by lib/deals.js: 21-day warranty.
-  function warrantyBadge(p) { return p.deal ? '21-day warranty (negotiated device)' : '3-month warranty'; }
+  function warrantyBadge(p) { return p.deal || p.bn ? '21-day warranty (negotiated device)' : '3-month warranty'; }
   var DELIVERY_FEE = (cfg && cfg.deliveryFee != null) ? cfg.deliveryFee : 100;
   var MEETUP_FEE = (cfg && cfg.meetupFee != null) ? cfg.meetupFee : 200;
   function isSold(p) { return !!p.sold || Number(p.stock) < 1; }
@@ -207,7 +207,7 @@
     var wa = waLink('Hi TheTechMart, I am interested in the ' + deviceName(p) + ' (' + money(p.price) + '). Is it still available?');
     return '<article class="card">' +
       '<a class="card-media" href="' + href + '" tabindex="-1" aria-hidden="true">' + media(p, opts.eager) +
-        (p.deal && opts.flag !== false ? '<span class="card-flag badge badge-deal">October deal</span>' : '') + '</a>' +
+        (p.deal && opts.flag !== false ? '<span class="card-flag badge badge-deal' + (p.bn ? ' badge-bn' : '') + '">' + (p.bn ? 'Black Friday deal' : 'October deal') + '</span>' : '') + '</a>' +
       '<div class="card-body">' +
         '<a class="card-title" href="' + href + '">' + esc(p.brand + ' ' + p.model) + '</a>' +
         '<div class="card-sub">' + esc([p.storage, p.color].filter(Boolean).join(' · ')) + '</div>' +
