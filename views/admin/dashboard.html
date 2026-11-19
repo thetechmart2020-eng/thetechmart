@@ -238,7 +238,7 @@ function renderProducts() {
       <td><b>${p.brand} ${p.model}</b><br><span class="helper">${p.storage || ''} ${p.color || ''}</span></td>
       <td>${p.category || 'Phones'}</td>
       <td>${p.condition}</td>
-      <td class="mono">${fmtPrice(p.price)}</td>
+      <td class="mono"><button class="btn btn-ghost btn-sm" title="Edit price" onclick="editPrice('${p.id}', ${Number(p.price)||0}, this)">${fmtPrice(p.price)}</button></td>
       <td>${p.stock}</td>
       <td>
         <span class="status-pill ${p.active !== false ? 'accepted' : 'rejected'}">${p.active !== false ? 'live' : 'hidden'}</span>
@@ -251,6 +251,23 @@ function renderProducts() {
       </td>
     </tr>
   `).join('') || `<tr><td colspan="8" class="helper">No stock yet — upload a CSV above to get started.</td></tr>`;
+}
+
+function editPrice(id, current, btn) {
+  const cell = btn.closest('td');
+  cell.innerHTML = `<input type="text" inputmode="numeric" value="${current}" style="width:90px" aria-label="New price in rand"> <button class="btn btn-primary btn-sm" data-current="${current}" onclick="savePrice('${id}', this)">Save</button>`;
+  cell.querySelector('input').focus();
+}
+
+async function savePrice(id, btn) {
+  const cell = btn.closest('td');
+  const input = cell.querySelector('input');
+  const price = Math.round(Number(String(input.value).replace(/[^0-9.]/g, '')));
+  const current = Number(btn.dataset.current);
+  if (!Number.isFinite(price) || price < 1) { toast('Enter a valid price'); return; }
+  if (price === current) { loadAll(); return; }
+  if (btn.dataset.arm !== '1') { btn.dataset.arm = '1'; btn.textContent = 'Confirm R' + price; return; }
+  try { await api(`/api/admin/products/${id}`, { method: 'PUT', body: { price } }); toast('Price updated to R' + price); loadAll(); } catch (e) { toast(e.message); }
 }
 
 function waLinkClient(phone, text) {
