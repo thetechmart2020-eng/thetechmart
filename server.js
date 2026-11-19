@@ -126,6 +126,10 @@ function publicProduct(p) {
     const ref = repoPhoto(p);
     if (ref) { images = [ref.src]; extra = { indicative: true, photoCredit: ref.credit }; }
   }
+  // This privacy-masked derivative is still an indicative reference photo, not a unit photo.
+  if (images.some(url => String(url).includes('/e7e34005-3105-4602-8c57-02820861d23a-'))) {
+    extra = { indicative: true, photoCredit: (repoPhoto(p) || {}).credit || null };
+  }
   const bn = BN.isCampaign(p);
   return { ...p, ...extra, images, imageUrl: p.imageUrl || images[0] || null, thumbs: images.map(thumbOf), deal: deals.isDeal(p) || bn, bn };
 }
