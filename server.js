@@ -118,6 +118,15 @@ function repoPhoto(p) {
   return null;
 }
 
+// Negotiation cap: a buyer can offer at most this far under the listed price.
+// Owner chose one flat R500 cap for all items (2026-11-19); keep the helper so a
+// smaller campaign tier can be restored by changing OFFER_MAX_DISCOUNT_DEAL.
+const OFFER_MAX_DISCOUNT = 500;
+const OFFER_MAX_DISCOUNT_DEAL = 500;
+function offerMaxDiscount(product) {
+  return BN.isCampaign(product) ? OFFER_MAX_DISCOUNT_DEAL : OFFER_MAX_DISCOUNT;
+}
+
 // Public shape of a product (adds the "negotiated device" flag used for the 21-day warranty badge).
 function publicProduct(p) {
   let images = (p.images && p.images.length ? p.images : (p.imageUrl ? [p.imageUrl] : [])).filter(Boolean);
@@ -294,7 +303,7 @@ app.post('/api/offers', asyncRoute(async (req, res) => {
   const price = Number(product.price);
   if (!Number.isFinite(amount) || amount < 1) fields.amount = 'Please enter your offer in rand, more than R0.';
   else if (amount > price) fields.amount = `That is above the listed price of R${price}. Use Buy now, or lower your offer.`;
-  else if (amount < Math.ceil(price * 0.5)) fields.amount = `Offers under R${Math.ceil(price * 0.5)} (half the price) are very unlikely to be accepted. Please try a higher amount.`;
+  else if (amount < price - offerMaxDiscount(product)) fields.amount = `Offers more than R${offerMaxDiscount(product)} below the listed price are very unlikely to be accepted. Please try a higher amount.`;
   if (Object.keys(fields).length) return fieldErrors(res, fields);
   const message = V.clean(req.body.message, 500);
 
@@ -307,7 +316,8 @@ app.post('/api/offers', asyncRoute(async (req, res) => {
   await db.logEvent({ type: 'offer_submitted', productId: product.id }).catch(() => {});
 
   const cfg = await db.getConfig();
-  const waMessage = `Hi TheTechMart! I'd like to make an offer.\n\nDevice: ${offer.productName}\nList price: R${offer.listPrice}\nMy offer: R${offer.amount}\nName: ${name}\nContact: ${ph.value}\n${message ? 'Note: ' + message : ''}\n\n(Offer ref: ${offer.id.slice(0, 8)})`;
+  const productUrl = `${siteBase(req)}/product?id=${product.id}`;
+  const waMessage = `Hi TheTechMart! I'd like to make an offer.\n\nDevice: ${offer.productName}\nList price: R${offer.listPrice}\nMy offer: R${offer.amount}\nProduct: ${productUrl}\nName: ${name}\nContact: ${ph.value}\n${message ? 'Note: ' + message : ''}\n\n(Offer ref: ${offer.id.slice(0, 8)})`;
 
   res.json({
     offer,
@@ -1394,7 +1404,7 @@ function bnCard(r, waNum) {
     <div class="bn-price">${fmtR(p.price)}</div>
     <div class="card-actions">${sold
       ? `<a class="btn btn-ghost" data-wa href="${waLink(waNum, msg)}" target="_blank" rel="noopener">Ask on WhatsApp</a>`
-      : `<a class="btn btn-gold" href="/checkout?id=${encodeURIComponent(p.id)}">Buy now</a><a class="btn btn-ghost" href="${href}#offer">Make an offer</a>`}</div>
+      : `<a class="btn btn-gold" href="/checkout?id=${encodeURIComponent(p.id)}">Buy now</a><a class="btn btn-ghost" href="${href}#offer">Let's negotiate</a>`}</div>
   </div>
 </article>`;
 }
@@ -1406,7 +1416,7 @@ function bnRow(r, waNum) {
   const tag = o.cond === 'new' ? 'New' : 'Grade A-B';
   return `<li class="bn-row"><a class="bn-row-name" href="${href}"><span>${escapeHtml(name)}</span><small>${escapeHtml([p.storage, tag].filter(Boolean).join(' · '))}</small></a>
   <span class="bn-row-price">${fmtR(p.price)}</span>
-  ${sold ? `<a class="btn btn-ghost" data-wa href="${waLink(waNum, msg)}" target="_blank" rel="noopener">Ask</a>` : `<a class="btn btn-gold" href="/checkout?id=${encodeURIComponent(p.id)}">Buy</a>`}</li>`;
+  ${sold ? `<a class="btn btn-ghost" data-wa href="${waLink(waNum, msg)}" target="_blank" rel="noopener">Ask</a>` : `<span class="bn-row-actions"><a class="btn btn-gold" href="/checkout?id=${encodeURIComponent(p.id)}">Buy</a><a class="btn btn-ghost" href="${href}#offer">Negotiate</a></span>`}</li>`;
 }
 // Order-only specials: no live catalogue product, so they are never shown as in stock.
 // Each row links to WhatsApp to confirm availability and delivery time before any payment.
