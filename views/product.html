@@ -55,7 +55,7 @@
       <h3 id="offer-h">Make an offer</h3>
       <p class="sub" id="offer-sub"></p>
       <form id="offer-form" novalidate>
-        <div class="field"><label for="o-amount">Your offer (R)</label><input id="o-amount" name="amount" type="number" inputmode="numeric" min="1" step="1" required></div>
+        <div class="field"><label for="o-amount">Your offer: <strong id="o-amount-out"></strong> <span class="offer-off" id="o-amount-off"></span></label><input id="o-amount" name="amount" type="range" min="1" max="1" step="10" value="1" required><div class="offer-scale"><span id="o-min"></span><span id="o-max"></span></div></div>
         <div class="row2">
           <div class="field"><label for="o-name">Your name</label><input id="o-name" name="name" autocomplete="name" maxlength="80" required></div>
           <div class="field"><label for="o-phone">Phone (WhatsApp)</label><input id="o-phone" name="phone" type="tel" autocomplete="tel" placeholder="082 123 4567" maxlength="20" required></div>
@@ -120,7 +120,7 @@
         '<div class="pd-actions">' + (sold
           ? '<a class="btn btn-primary" data-wa data-custom data-product="' + p.id + '" href="' + wa + '" target="_blank" rel="noopener">WhatsApp to ask about restock</a>'
           : '<a class="btn btn-primary" data-buy data-product="' + p.id + '" href="/checkout?id=' + encodeURIComponent(p.id) + '">Buy now</a>' +
-            '<button class="btn btn-ghost" type="button" id="offer-open-btn">Make an offer</button>' +
+            '<button class="btn btn-ghost" type="button" id="offer-open-btn">Let\'s negotiate</button>' +
             '<a class="btn btn-wa" data-wa data-custom data-product="' + p.id + '" href="' + ask + '" target="_blank" rel="noopener">WhatsApp to ask</a>') +
         '</div>' +
         '<dl class="specs">' + spec('Brand', p.brand) + spec('Model', p.model) + spec('Category', p.category) + spec('Storage', p.storage) + spec('Colour', p.color) + spec('Condition', p.condition) + '</dl>' +
@@ -154,10 +154,23 @@
 
   // ---- offer modal ----
   var channel = 'whatsapp';
+  function updateOfferOut() {
+    var s = $('o-amount'), v = Number(s.value), p = Number(product.price);
+    $('o-amount-out').textContent = T.money(v);
+    $('o-amount-off').textContent = v < p ? '(' + T.money(p - v) + ' below the listed price)' : '(listed price)';
+    $('o-min').textContent = T.money(Number(s.min));
+    $('o-max').textContent = T.money(p);
+  }
   function openOffer() {
+    // Flat R500 negotiation room on every item (owner decision, 2026-11-19).
+    var maxDisc = 500;
+    var s = $('o-amount'), p = Number(product.price);
+    s.min = Math.max(1, p - maxDisc); s.max = p; s.step = 10; s.value = p;
+    updateOfferOut();
     $('offer-sub').textContent = T.deviceName(product) + ' listed at ' + T.money(product.price);
     $('offer-overlay').classList.add('open'); setTimeout(function () { if (!document.querySelector('#offer-form :focus')) $('o-amount').focus(); }, 50);
   }
+  $('o-amount').addEventListener('input', updateOfferOut);
   function closeOffer() { $('offer-overlay').classList.remove('open'); }
   $('offer-close').addEventListener('click', closeOffer);
   $('offer-overlay').addEventListener('click', function (e) { if (e.target === this) closeOffer(); });
@@ -167,13 +180,13 @@
   $('offer-form').addEventListener('submit', async function (e) {
     e.preventDefault();
     var f = e.target, err = $('offer-err'), fv = T.fv; err.classList.remove('show');
-    // An offer must be more than R0, not above the listed price, and at least half of it (lower offers are unrealistic).
+    // An offer must be more than R0, not above the listed price, and within the slider's negotiation room (lower offers are unrealistic).
     var rules = [
       { name: 'amount', check: function (v) {
-        var n = Number(v), price = Number(product.price), min = Math.ceil(price * 0.5);
-        if (!v || !isFinite(n) || n < 1) return 'Please enter your offer in rand, more than R0.';
+        var n = Number(v), price = Number(product.price), min = Number($('o-amount').min);
+        if (!v || !isFinite(n) || n < 1) return 'Please choose your offer.';
         if (n > price) return 'That is above the listed price of ' + T.money(price) + '. Use Buy now, or lower your offer.';
-        if (n < min) return 'Offers under ' + T.money(min) + ' (half the price) are very unlikely to be accepted. Please try a higher amount.';
+        if (n < min) return 'Offers more than ' + T.money(price - min) + ' below the listed price are very unlikely to be accepted. Please try a higher amount.';
         return ''; } },
       { name: 'name', check: function (v) { return fv.clean(v, 80).length < 2 ? fv.MSG.name : ''; } },
       { name: 'phone', check: function (v) { return !fv.phone(v) ? fv.MSG.phone : ''; } }

@@ -218,7 +218,7 @@
           (sold
             ? '<a class="btn btn-ghost" data-wa data-product="' + esc(p.id) + '" href="' + wa + '" target="_blank" rel="noopener">Ask on WhatsApp</a>'
             : '<a class="btn btn-primary" data-buy data-product="' + esc(p.id) + '" href="/checkout?id=' + encodeURIComponent(p.id) + '">Buy now</a>' +
-              '<a class="btn btn-ghost" href="' + href + '#offer">Make an offer</a>') +
+              '<a class="btn btn-ghost" href="' + href + '#offer">Let\'s negotiate</a>') +
         '</div>' +
       '</div></article>';
   }
