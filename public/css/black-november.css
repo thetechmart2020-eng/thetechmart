@@ -64,7 +64,8 @@
 .bn-row-name small{opacity:.7}
 .bn-row-price{font-weight:700;color:var(--gold);white-space:nowrap}
 .bn-row .btn{padding:8px 16px;min-height:40px}
-@media (max-width:420px){.bn-row{gap:8px}.bn-row-price{font-size:.95rem}.bn-row .btn{padding:6px 14px;min-width:64px}}
+.bn-row-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+@media (max-width:420px){.bn-row{gap:8px}.bn-row-price{font-size:.95rem}.bn-row .btn{padding:6px 14px;min-width:64px}.bn-row-actions{flex-direction:column;align-items:stretch;gap:6px}}
 /* Available-to-order rows: name on its own line; price, warranty badge and the enquiry
    button sit together on the line below so narrow screens never squeeze the name. */
 .bn-row-order{grid-template-columns:1fr;gap:6px}
